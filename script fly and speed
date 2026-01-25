@@ -1,7 +1,4 @@
--- StarterPlayerScripts/AutoAdminPanel_FlySpeed_AntiFall.client.lua
--- 1 LocalScript duy nhất: tự tạo GUI + Fly + chỉnh tốc độ chạy/bay + ẨN/ĐÓNG + Anti ngã
--- Lưu ý: Đây là client-side.
-
+-- StarterPlayerScripts/AutoFlySpeed_AntiFall.client.lua
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -12,7 +9,6 @@ local playerGui = player:WaitForChild("PlayerGui")
 -- ===== CONFIG =====
 local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
-
 local walkSpeed = 16
 local flySpeed = 60
 
@@ -24,148 +20,130 @@ local function new(inst, props, parent)
 	return obj
 end
 
-local function clamp(n, a, b)
-	return math.max(a, math.min(b, n))
-end
-
-local function getChar()
-	return player.Character or player.CharacterAdded:Wait()
-end
-
-local function getHumanoid()
-	return getChar():WaitForChild("Humanoid")
-end
-
-local function getHRP()
-	return getChar():WaitForChild("HumanoidRootPart")
-end
+local function clamp(n, a, b) return math.max(a, math.min(b, n)) end
+local function getChar() return player.Character or player.CharacterAdded:Wait() end
+local function getHumanoid() return getChar():WaitForChild("Humanoid") end
+local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 
 -- ===== CLEAN OLD GUI =====
 local old = playerGui:FindFirstChild("AutoFlySpeedGui")
 if old then old:Destroy() end
 
 -- ===== CREATE GUI =====
-local gui = new("ScreenGui", {
-	Name = "AutoFlySpeedGui",
-	ResetOnSpawn = false
-}, playerGui)
+local gui = new("ScreenGui", {Name="AutoFlySpeedGui", ResetOnSpawn=false}, playerGui)
 
+-- ✅ Tăng chiều cao để chắc chắn thấy nút Anti ngã
 local panel = new("Frame", {
-	Name = "ControlPanel",
-	Size = UDim2.new(0, 350, 0, 240),
-	Position = UDim2.new(1, -370, 1, -280),
-	BackgroundTransparency = 0.15
+	Name="ControlPanel",
+	Size=UDim2.new(0, 360, 0, 270),                 -- ✅ cao hơn
+	Position=UDim2.new(1, -390, 1, -320),
+	BackgroundTransparency=0.15
 }, gui)
 
--- Top bar
 local topBar = new("Frame", {
-	Name = "TopBar",
-	Size = UDim2.new(1, 0, 0, 36),
-	Position = UDim2.new(0, 0, 0, 0),
-	BackgroundTransparency = 0.25
+	Size=UDim2.new(1, 0, 0, 36),
+	BackgroundTransparency=0.25
 }, panel)
 
 local title = new("TextLabel", {
-	Size = UDim2.new(1, -110, 1, 0),
-	Position = UDim2.new(0, 10, 0, 0),
-	BackgroundTransparency = 1,
-	TextScaled = true,
-	TextXAlignment = Enum.TextXAlignment.Left,
-	Text = "FLY + SPEED"
+	Size=UDim2.new(1, -110, 1, 0),
+	Position=UDim2.new(0, 10, 0, 0),
+	BackgroundTransparency=1,
+	TextScaled=true,
+	TextXAlignment=Enum.TextXAlignment.Left,
+	Text="FLY + SPEED"
 }, topBar)
 
 local btnHide = new("TextButton", {
-	Name = "HideBtn",
-	Size = UDim2.new(0, 45, 0, 26),
-	Position = UDim2.new(1, -100, 0.5, -13),
-	TextScaled = true,
-	Text = "_"
+	Size=UDim2.new(0, 45, 0, 26),
+	Position=UDim2.new(1, -100, 0.5, -13),
+	TextScaled=true,
+	Text="_"
 }, topBar)
 
 local btnClose = new("TextButton", {
-	Name = "CloseBtn",
-	Size = UDim2.new(0, 45, 0, 26),
-	Position = UDim2.new(1, -50, 0.5, -13),
-	TextScaled = true,
-	Text = "X"
+	Size=UDim2.new(0, 45, 0, 26),
+	Position=UDim2.new(1, -50, 0.5, -13),
+	TextScaled=true,
+	Text="X"
 }, topBar)
 
--- Content
 local content = new("Frame", {
-	Name = "Content",
-	Size = UDim2.new(1, 0, 1, -36),
-	Position = UDim2.new(0, 0, 0, 36),
-	BackgroundTransparency = 1
+	Name="Content",
+	Size=UDim2.new(1, 0, 1, -36),
+	Position=UDim2.new(0, 0, 0, 36),
+	BackgroundTransparency=1
 }, panel)
 
 local toggleFlyBtn = new("TextButton", {
-	Size = UDim2.new(1, -20, 0, 45),
-	Position = UDim2.new(0, 10, 0, 10),
-	TextScaled = true,
-	Text = "BẬT BAY"
+	Size=UDim2.new(1, -20, 0, 45),
+	Position=UDim2.new(0, 10, 0, 10),
+	TextScaled=true,
+	Text="BẬT BAY"
 }, content)
 
 -- Row chạy
 local walkLabel = new("TextLabel", {
-	Size = UDim2.new(0.55, -15, 0, 35),
-	Position = UDim2.new(0, 10, 0, 65),
-	BackgroundTransparency = 1,
-	TextScaled = true,
-	TextXAlignment = Enum.TextXAlignment.Left,
-	Text = ("CHẠY: %d"):format(walkSpeed)
+	Size=UDim2.new(0.55, -15, 0, 35),
+	Position=UDim2.new(0, 10, 0, 65),
+	BackgroundTransparency=1,
+	TextScaled=true,
+	TextXAlignment=Enum.TextXAlignment.Left,
+	Text=("CHẠY: %d"):format(walkSpeed)
 }, content)
 
 local walkMinus = new("TextButton", {
-	Size = UDim2.new(0, 45, 0, 35),
-	Position = UDim2.new(0.55, 0, 0, 65),
-	TextScaled = true,
-	Text = "-"
+	Size=UDim2.new(0, 45, 0, 35),
+	Position=UDim2.new(0.55, 0, 0, 65),
+	TextScaled=true,
+	Text="-"
 }, content)
 
 local walkPlus = new("TextButton", {
-	Size = UDim2.new(0, 45, 0, 35),
-	Position = UDim2.new(0.55, 50, 0, 65),
-	TextScaled = true,
-	Text = "+"
+	Size=UDim2.new(0, 45, 0, 35),
+	Position=UDim2.new(0.55, 50, 0, 65),
+	TextScaled=true,
+	Text="+"
 }, content)
 
 -- Row bay
 local flyLabel = new("TextLabel", {
-	Size = UDim2.new(0.55, -15, 0, 35),
-	Position = UDim2.new(0, 10, 0, 105),
-	BackgroundTransparency = 1,
-	TextScaled = true,
-	TextXAlignment = Enum.TextXAlignment.Left,
-	Text = ("BAY: %d"):format(flySpeed)
+	Size=UDim2.new(0.55, -15, 0, 35),
+	Position=UDim2.new(0, 10, 0, 105),
+	BackgroundTransparency=1,
+	TextScaled=true,
+	TextXAlignment=Enum.TextXAlignment.Left,
+	Text=("BAY: %d"):format(flySpeed)
 }, content)
 
 local flyMinus = new("TextButton", {
-	Size = UDim2.new(0, 45, 0, 35),
-	Position = UDim2.new(0.55, 0, 0, 105),
-	TextScaled = true,
-	Text = "-"
+	Size=UDim2.new(0, 45, 0, 35),
+	Position=UDim2.new(0.55, 0, 0, 105),
+	TextScaled=true,
+	Text="-"
 }, content)
 
 local flyPlus = new("TextButton", {
-	Size = UDim2.new(0, 45, 0, 35),
-	Position = UDim2.new(0.55, 50, 0, 105),
-	TextScaled = true,
-	Text = "+"
+	Size=UDim2.new(0, 45, 0, 35),
+	Position=UDim2.new(0.55, 50, 0, 105),
+	TextScaled=true,
+	Text="+"
 }, content)
 
+-- ✅ NÚT ANTI NGÃ (đảm bảo nằm trong panel)
 local antiFallBtn = new("TextButton", {
-	Size = UDim2.new(1, -20, 0, 35),
-	Position = UDim2.new(0, 10, 0, 145),
-	TextScaled = true,
-	Text = "ANTI NGÃ: TẮT"
+	Size=UDim2.new(1, -20, 0, 40),
+	Position=UDim2.new(0, 10, 0, 150),              -- ✅ vị trí rõ ràng
+	TextScaled=true,
+	Text="ANTI NGÃ: TẮT"
 }, content)
 
 local hint = new("TextLabel", {
-	Size = UDim2.new(1, -20, 0, 30),
-	Position = UDim2.new(0, 10, 0, 185),
-	BackgroundTransparency = 1,
-	TextScaled = true,
-	Text = "WASD bay • Space lên • Ctrl xuống"
+	Size=UDim2.new(1, -20, 0, 30),
+	Position=UDim2.new(0, 10, 0, 195),
+	BackgroundTransparency=1,
+	TextScaled=true,
+	Text="WASD bay • Space lên • Ctrl xuống • P ẩn/hiện"
 }, content)
 
 -- ===== APPLY WALK SPEED =====
@@ -175,11 +153,11 @@ local function applyWalkSpeed()
 	walkLabel.Text = ("CHẠY: %d"):format(walkSpeed)
 end
 
--- ===== FLY LOGIC =====
+-- ===== FLY =====
 local flying = false
 local bv, bg, flyConn
 
-local function stopFlyUI()
+local function stopFly()
 	if not flying then return end
 	flying = false
 	toggleFlyBtn.Text = "BẬT BAY"
@@ -188,7 +166,7 @@ local function stopFlyUI()
 	if bg then bg:Destroy() bg = nil end
 end
 
-local function startFlyUI()
+local function startFly()
 	if flying then return end
 	flying = true
 	toggleFlyBtn.Text = "TẮT BAY"
@@ -227,10 +205,9 @@ local function startFlyUI()
 	end)
 end
 
--- ===== ANTI FALL LOGIC =====
+-- ===== ANTI FALL =====
 local antiFall = false
-local antiStateConn
-local antiHeartbeatConn
+local antiStateConn, antiHeartbeatConn
 
 local function applyAntiFall(state)
 	antiFall = state
@@ -242,9 +219,7 @@ local function applyAntiFall(state)
 	local hum = getHumanoid()
 	hum.PlatformStand = false
 
-	if not antiFall then
-		return
-	end
+	if not antiFall then return end
 
 	antiStateConn = hum.StateChanged:Connect(function(_, newState)
 		if not antiFall then return end
@@ -265,9 +240,9 @@ local function applyAntiFall(state)
 	end)
 end
 
--- ===== EVENTS =====
+-- ===== UI EVENTS =====
 toggleFlyBtn.MouseButton1Click:Connect(function()
-	if flying then stopFlyUI() else startFlyUI() end
+	if flying then stopFly() else startFly() end
 end)
 
 walkMinus.MouseButton1Click:Connect(function()
@@ -294,13 +269,13 @@ antiFallBtn.MouseButton1Click:Connect(function()
 	applyAntiFall(not antiFall)
 end)
 
--- Hide/Show (minimize)
+-- Hide/Minimize
 local minimized = false
 local fullSize = panel.Size
-local miniSize = UDim2.new(0, 350, 0, 36)
+local miniSize = UDim2.new(0, 360, 0, 36)
 
-local function setMinimized(state)
-	minimized = state
+btnHide.MouseButton1Click:Connect(function()
+	minimized = not minimized
 	if minimized then
 		content.Visible = false
 		panel.Size = miniSize
@@ -312,15 +287,10 @@ local function setMinimized(state)
 		btnHide.Text = "_"
 		title.Text = "FLY + SPEED"
 	end
-end
-
-btnHide.MouseButton1Click:Connect(function()
-	setMinimized(not minimized)
 end)
 
--- Close (destroy UI + stop fly)
 btnClose.MouseButton1Click:Connect(function()
-	stopFlyUI()
+	stopFly()
 	if antiFall then applyAntiFall(false) end
 	gui:Destroy()
 end)
@@ -333,15 +303,12 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
--- Respawn handling
+-- Respawn
 player.CharacterAdded:Connect(function()
-	stopFlyUI()
+	stopFly()
 	task.wait(0.1)
 	applyWalkSpeed()
-	if antiFall then
-		applyAntiFall(true)
-	end
+	if antiFall then applyAntiFall(true) end
 end)
 
--- Init
 applyWalkSpeed()
