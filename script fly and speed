@@ -1,4 +1,4 @@
--- StarterPlayerScripts/OneScript_KeyThenPanels.client.lua
+-- StarterPlayerScripts/OneScript_KeyThenPanels_GhostMode.client.lua
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -29,23 +29,31 @@ end
 
 local old = playerGui:FindFirstChild("OneScriptGUI")
 if old then old:Destroy() end
-
 local gui = mk("ScreenGui", {Name="OneScriptGUI", ResetOnSpawn=false}, playerGui)
 
 local access = false
 
+-- Fly
 local flyEnabled = false
 local walkSpeed = 16
 local flySpeed = 60
 local bv, bg, flyConn
 
+-- Anti ragdoll
 local antiRagdoll = false
 local antiConn
 
+-- Finite jump
 local finEnabled = false
 local finMaxAir = 2
 local finBoost = 55
 local usedAir = 0
+
+-- Ghost mode
+local ghostEnabled = false
+local ghostConn
+local lastPos
+local stuckTime = 0
 
 local function isGrounded(hum)
 	local st = hum:GetState()
@@ -54,7 +62,173 @@ local function isGrounded(hum)
 		or st == Enum.HumanoidStateType.Landed
 end
 
--- KEY UI
+local function stopFly()
+	if not flyEnabled then return end
+	flyEnabled = false
+	if flyConn then flyConn:Disconnect() flyConn = nil end
+	if bv then bv:Destroy() bv = nil end
+	if bg then bg:Destroy() bg = nil end
+end
+
+local function startFly()
+	if flyEnabled then return end
+	flyEnabled = true
+
+	local hrp = getHRP()
+	bv = Instance.new("BodyVelocity")
+	bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+	bv.Velocity = Vector3.zero
+	bv.Parent = hrp
+
+	bg = Instance.new("BodyGyro")
+	bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+	bg.P = 9e4
+	bg.CFrame = hrp.CFrame
+	bg.Parent = hrp
+
+	flyConn = RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera
+		if not cam or not hrp then return end
+
+		local move = Vector3.zero
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+
+		if move.Magnitude > 0 then move = move.Unit * flySpeed end
+		bv.Velocity = move
+		bg.CFrame = cam.CFrame
+	end)
+end
+
+local function applyWalkSpeed()
+	local hum = getHumanoid()
+	hum.WalkSpeed = walkSpeed
+end
+
+local function setAntiRagdoll(state)
+	antiRagdoll = state
+	if antiConn then antiConn:Disconnect() antiConn = nil end
+	if not antiRagdoll then return end
+
+	local hum = getHumanoid()
+	hum.PlatformStand = false
+
+	antiConn = hum.StateChanged:Connect(function(_, newState)
+		if not antiRagdoll then return end
+		if newState == Enum.HumanoidStateType.Ragdoll
+			or newState == Enum.HumanoidStateType.FallingDown
+			or newState == Enum.HumanoidStateType.Physics then
+			pcall(function()
+				hum.PlatformStand = false
+				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+				hum:ChangeState(Enum.HumanoidStateType.Running)
+			end)
+		end
+	end)
+end
+
+local function hookGroundReset()
+	local hum = getHumanoid()
+	hum.StateChanged:Connect(function(_, newState)
+		if newState == Enum.HumanoidStateType.Landed
+			or newState == Enum.HumanoidStateType.Running
+			or newState == Enum.HumanoidStateType.RunningNoPhysics then
+			usedAir = 0
+		end
+	end)
+end
+
+local function GhostStep(studs)
+	studs = studs or 6
+	local char = player.Character
+	if not char then return end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	local cam = workspace.CurrentCamera
+	if not cam then return end
+
+	local dir = cam.CFrame.LookVector
+	local flat = Vector3.new(dir.X, 0, dir.Z)
+	if flat.Magnitude < 0.01 then return end
+	flat = flat.Unit
+
+	local start = hrp.Position + Vector3.new(0, 2, 0)
+	local target = hrp.Position + flat * studs + Vector3.new(0, 2, 0)
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {char}
+
+	local hit = workspace:Raycast(start, (target - start), params)
+	if hit then
+		target = hit.Position - flat * 1
+	end
+
+	local rot = hrp.CFrame - hrp.Position
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.CFrame = CFrame.new(target) * rot
+end
+
+local function setGhostMode(state)
+	ghostEnabled = state
+	if ghostConn then ghostConn:Disconnect() ghostConn = nil end
+	lastPos = nil
+	stuckTime = 0
+
+	if not ghostEnabled then return end
+
+	ghostConn = RunService.Heartbeat:Connect(function(dt)
+		local char = player.Character
+		if not char then return end
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if not hrp or not hum then return end
+
+		-- chỉ hỗ trợ khi đang đi bộ (không can thiệp khi bay)
+		if flyEnabled then
+			lastPos = hrp.Position
+			stuckTime = 0
+			return
+		end
+
+		-- nếu đang bấm WASD mà đứng yên quá lâu => coi như kẹt => tự GhostStep nhỏ
+		local movingKey =
+			UserInputService:IsKeyDown(Enum.KeyCode.W) or
+			UserInputService:IsKeyDown(Enum.KeyCode.A) or
+			UserInputService:IsKeyDown(Enum.KeyCode.S) or
+			UserInputService:IsKeyDown(Enum.KeyCode.D)
+
+		if not movingKey then
+			lastPos = hrp.Position
+			stuckTime = 0
+			return
+		end
+
+		if not lastPos then
+			lastPos = hrp.Position
+			return
+		end
+
+		local moved = (hrp.Position - lastPos).Magnitude
+		lastPos = hrp.Position
+
+		if moved < 0.05 and hum.MoveDirection.Magnitude > 0.05 then
+			stuckTime += dt
+			if stuckTime >= 0.35 then
+				stuckTime = 0
+				GhostStep(4)
+			end
+		else
+			stuckTime = 0
+		end
+	end)
+end
+
+-- ===== KEY UI =====
 local keyBox = mk("Frame", {
 	Name="KeyBox",
 	Size=UDim2.new(0, 360, 0, 190),
@@ -94,84 +268,10 @@ local btn = mk("TextButton", {
 	Text="XÁC NHẬN"
 }, keyBox)
 
+-- Panels refs
 local leftPanel, rightPanel
 local finToggle, finMaxLbl, finBoostLbl
-local flyBtn, speedLbl, flySpeedLbl, antiBtn
-
-local function stopFly()
-	if not flyEnabled then return end
-	flyEnabled = false
-	if flyBtn then flyBtn.Text = "BAY: TẮT" end
-	if flyConn then flyConn:Disconnect() flyConn = nil end
-	if bv then bv:Destroy() bv = nil end
-	if bg then bg:Destroy() bg = nil end
-end
-
-local function startFly()
-	if flyEnabled then return end
-	flyEnabled = true
-	if flyBtn then flyBtn.Text = "BAY: BẬT" end
-
-	local hrp = getHRP()
-	bv = Instance.new("BodyVelocity")
-	bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-	bv.Velocity = Vector3.zero
-	bv.Parent = hrp
-
-	bg = Instance.new("BodyGyro")
-	bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-	bg.P = 9e4
-	bg.CFrame = hrp.CFrame
-	bg.Parent = hrp
-
-	flyConn = RunService.RenderStepped:Connect(function()
-		local cam = workspace.CurrentCamera
-		if not cam or not hrp then return end
-
-		local move = Vector3.zero
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
-
-		if move.Magnitude > 0 then move = move.Unit * flySpeed end
-		bv.Velocity = move
-		bg.CFrame = cam.CFrame
-	end)
-end
-
-local function applyWalkSpeed()
-	local hum = getHumanoid()
-	hum.WalkSpeed = walkSpeed
-	if speedLbl then speedLbl.Text = ("SPEED: %d"):format(walkSpeed) end
-end
-
-local function setAntiRagdoll(state)
-	antiRagdoll = state
-	if antiBtn then
-		antiBtn.Text = antiRagdoll and "ANTI RAGDOLL: BẬT" or "ANTI RAGDOLL: TẮT"
-	end
-	if antiConn then antiConn:Disconnect() antiConn = nil end
-	if not antiRagdoll then return end
-
-	local hum = getHumanoid()
-	hum.PlatformStand = false
-
-	antiConn = hum.StateChanged:Connect(function(_, newState)
-		if not antiRagdoll then return end
-		if newState == Enum.HumanoidStateType.Ragdoll
-			or newState == Enum.HumanoidStateType.FallingDown
-			or newState == Enum.HumanoidStateType.Physics then
-			pcall(function()
-				hum.PlatformStand = false
-				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-				hum:ChangeState(Enum.HumanoidStateType.Running)
-			end)
-		end
-	end)
-end
+local flyBtn, speedLbl, flySpeedLbl, antiBtn, ghostBtn, ghostStepBtn
 
 local function refreshFiniteUI()
 	if finToggle then
@@ -181,24 +281,21 @@ local function refreshFiniteUI()
 	if finBoostLbl then finBoostLbl.Text = ("LỰC NHẢY: %d"):format(finBoost) end
 end
 
-local function hookGroundReset()
-	local hum = getHumanoid()
-	hum.StateChanged:Connect(function(_, newState)
-		if newState == Enum.HumanoidStateType.Landed
-			or newState == Enum.HumanoidStateType.Running
-			or newState == Enum.HumanoidStateType.RunningNoPhysics then
-			usedAir = 0
-		end
-	end)
+local function refreshRightUI()
+	if flyBtn then flyBtn.Text = flyEnabled and "BAY: BẬT" or "BAY: TẮT" end
+	if speedLbl then speedLbl.Text = ("SPEED: %d"):format(walkSpeed) end
+	if flySpeedLbl then flySpeedLbl.Text = ("FLY SPEED: %d"):format(flySpeed) end
+	if antiBtn then antiBtn.Text = antiRagdoll and "ANTI RAGDOLL: BẬT" or "ANTI RAGDOLL: TẮT" end
+	if ghostBtn then ghostBtn.Text = ghostEnabled and "GHOST MODE: BẬT" or "GHOST MODE: TẮT" end
 end
 
 local function createPanels()
+	-- LEFT
 	leftPanel = mk("Frame", {
 		Name="LeftPanel",
 		Size=UDim2.new(0, 320, 0, 220),
 		Position=UDim2.new(0, 20, 0, 20),
-		BackgroundTransparency=0.15,
-		Visible=true
+		BackgroundTransparency=0.15
 	}, gui)
 
 	mk("TextLabel", {
@@ -213,8 +310,7 @@ local function createPanels()
 	finToggle = mk("TextButton", {
 		Size=UDim2.new(1, -20, 0, 40),
 		Position=UDim2.new(0, 10, 0, 40),
-		TextScaled=true,
-		Text="FINITE JUMP: TẮT"
+		TextScaled=true
 	}, leftPanel)
 
 	finMaxLbl = mk("TextLabel", {
@@ -269,12 +365,12 @@ local function createPanels()
 		Text="P: ẩn/hiện 2 bảng"
 	}, leftPanel)
 
+	-- RIGHT
 	rightPanel = mk("Frame", {
 		Name="RightPanel",
-		Size=UDim2.new(0, 320, 0, 250),
+		Size=UDim2.new(0, 320, 0, 340),
 		Position=UDim2.new(1, -340, 0, 20),
-		BackgroundTransparency=0.15,
-		Visible=true
+		BackgroundTransparency=0.15
 	}, gui)
 
 	mk("TextLabel", {
@@ -289,8 +385,7 @@ local function createPanels()
 	flyBtn = mk("TextButton", {
 		Size=UDim2.new(1, -20, 0, 42),
 		Position=UDim2.new(0, 10, 0, 40),
-		TextScaled=true,
-		Text="BAY: TẮT"
+		TextScaled=true
 	}, rightPanel)
 
 	speedLbl = mk("TextLabel", {
@@ -338,20 +433,33 @@ local function createPanels()
 	}, rightPanel)
 
 	antiBtn = mk("TextButton", {
-		Size=UDim2.new(1, -20, 0, 40),
+		Size=UDim2.new(1, -20, 0, 38),
 		Position=UDim2.new(0, 10, 0, 178),
+		TextScaled=true
+	}, rightPanel)
+
+	ghostBtn = mk("TextButton", {
+		Size=UDim2.new(1, -20, 0, 38),
+		Position=UDim2.new(0, 10, 0, 220),
+		TextScaled=true
+	}, rightPanel)
+
+	ghostStepBtn = mk("TextButton", {
+		Size=UDim2.new(1, -20, 0, 38),
+		Position=UDim2.new(0, 10, 0, 262),
 		TextScaled=true,
-		Text="ANTI RAGDOLL: TẮT"
+		Text="GHOST STEP"
 	}, rightPanel)
 
 	mk("TextLabel", {
 		Size=UDim2.new(1, -20, 0, 30),
-		Position=UDim2.new(0, 10, 0, 220),
+		Position=UDim2.new(0, 10, 0, 304),
 		BackgroundTransparency=1,
 		TextScaled=true,
 		Text="Bay: WASD • Space lên • Ctrl xuống"
 	}, rightPanel)
 
+	-- Events
 	finToggle.MouseButton1Click:Connect(function()
 		finEnabled = not finEnabled
 		refreshFiniteUI()
@@ -377,35 +485,51 @@ local function createPanels()
 
 	flyBtn.MouseButton1Click:Connect(function()
 		if flyEnabled then stopFly() else startFly() end
+		refreshRightUI()
 	end)
 
 	speedMinus.MouseButton1Click:Connect(function()
 		walkSpeed = clamp(walkSpeed - WALK_STEP, WALK_MIN, WALK_MAX)
 		applyWalkSpeed()
+		refreshRightUI()
 	end)
 	speedPlus.MouseButton1Click:Connect(function()
 		walkSpeed = clamp(walkSpeed + WALK_STEP, WALK_MIN, WALK_MAX)
 		applyWalkSpeed()
+		refreshRightUI()
 	end)
 
 	flySpeedMinus.MouseButton1Click:Connect(function()
 		flySpeed = clamp(flySpeed - FLY_STEP, FLY_MIN, FLY_MAX)
-		flySpeedLbl.Text = ("FLY SPEED: %d"):format(flySpeed)
+		refreshRightUI()
 	end)
 	flySpeedPlus.MouseButton1Click:Connect(function()
 		flySpeed = clamp(flySpeed + FLY_STEP, FLY_MIN, FLY_MAX)
-		flySpeedLbl.Text = ("FLY SPEED: %d"):format(flySpeed)
+		refreshRightUI()
 	end)
 
 	antiBtn.MouseButton1Click:Connect(function()
 		setAntiRagdoll(not antiRagdoll)
+		refreshRightUI()
+	end)
+
+	ghostBtn.MouseButton1Click:Connect(function()
+		setGhostMode(not ghostEnabled)
+		refreshRightUI()
+	end)
+
+	ghostStepBtn.MouseButton1Click:Connect(function()
+		GhostStep(6)
 	end)
 
 	refreshFiniteUI()
 	applyWalkSpeed()
 	setAntiRagdoll(false)
+	setGhostMode(false)
+	refreshRightUI()
 end
 
+-- Input: P toggle panels + Finite Jump
 UserInputService.InputBegan:Connect(function(inputObj, gp)
 	if gp then return end
 
@@ -437,9 +561,11 @@ hookGroundReset()
 
 player.CharacterAdded:Connect(function()
 	stopFly()
+	if ghostConn then ghostConn:Disconnect() ghostConn = nil end
 	task.wait(0.1)
 	applyWalkSpeed()
 	if antiRagdoll then setAntiRagdoll(true) end
+	if ghostEnabled then setGhostMode(true) end
 	usedAir = 0
 	hookGroundReset()
 end)
