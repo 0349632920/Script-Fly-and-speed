@@ -1,4 +1,4 @@
--- StarterPlayerScripts/AutoPanel_V2.client.lua
+-- StarterPlayerScripts/AutoPanel_V3_FlySpeed_AntiFall_Heal_Tele_Invis.client.lua
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -33,15 +33,15 @@ local function findSpawnCFrame()
 end
 
 -- ✅ Xoá GUI cũ nếu có
-local old = playerGui:FindFirstChild("AutoPanel_V2")
+local old = playerGui:FindFirstChild("AutoPanel_V3")
 if old then old:Destroy() end
 
-local gui = new("ScreenGui", {Name="AutoPanel_V2", ResetOnSpawn=false}, playerGui)
+local gui = new("ScreenGui", {Name="AutoPanel_V3", ResetOnSpawn=false}, playerGui)
 
 local panel = new("Frame", {
 	Name="Panel",
-	Size=UDim2.new(0, 360, 0, 420),
-	Position=UDim2.new(0, 20, 0, 20), -- ✅ góc trên trái
+	Size=UDim2.new(0, 360, 0, 470), -- cao hơn để có nút tàng hình
+	Position=UDim2.new(0, 20, 0, 20),
 	BackgroundTransparency=0.15
 }, gui)
 
@@ -50,7 +50,7 @@ new("TextLabel", {
 	Position=UDim2.new(0, 10, 0, 8),
 	BackgroundTransparency=1,
 	TextScaled=true,
-	Text="FLY + SPEED + ANTI NGÃ + HEAL + TELE"
+	Text="FLY + SPEED + ANTI NGÃ + HEAL + TELE + INVIS"
 }, panel)
 
 local toggleFlyBtn = new("TextButton", {
@@ -120,7 +120,6 @@ local healBtn = new("TextButton", {
 	Text="HỒI MÁU (MAX)"
 }, panel)
 
--- ✅ NÚT TELE (có dấu ✅ để dễ thấy)
 local teleBtn = new("TextButton", {
 	Size=UDim2.new(1, -20, 0, 40),
 	Position=UDim2.new(0, 10, 0, 270),
@@ -128,11 +127,17 @@ local teleBtn = new("TextButton", {
 	Text="TELE VỀ SPAWN ✅"
 }, panel)
 
-print("✅ GUI created. TELE button:", teleBtn:GetFullName())
+-- ✅ NÚT TÀNG HÌNH
+local invisBtn = new("TextButton", {
+	Size=UDim2.new(1, -20, 0, 40),
+	Position=UDim2.new(0, 10, 0, 315),
+	TextScaled=true,
+	Text="TÀNG HÌNH: TẮT"
+}, panel)
 
 new("TextLabel", {
-	Size=UDim2.new(1, -20, 0, 90),
-	Position=UDim2.new(0, 10, 0, 320),
+	Size=UDim2.new(1, -20, 0, 110),
+	Position=UDim2.new(0, 10, 0, 360),
 	BackgroundTransparency=1,
 	TextScaled=true,
 	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện panel"
@@ -231,6 +236,50 @@ local function applyAntiFall(state)
 	end)
 end
 
+-- ===== INVIS (chỉ ẩn nhân vật của mình) =====
+local invisible = false
+local saved = {} -- [Instance] = {Transparency=?, LocalTransparencyModifier=?}
+
+local function setPartInvis(part, on)
+	if not part:IsA("BasePart") then return end
+	if on then
+		if not saved[part] then
+			saved[part] = {
+				T = part.Transparency,
+				LTM = part.LocalTransparencyModifier
+			}
+		end
+		part.LocalTransparencyModifier = 1
+	else
+		local s = saved[part]
+		if s then
+			part.LocalTransparencyModifier = s.LTM
+		else
+			part.LocalTransparencyModifier = 0
+		end
+	end
+end
+
+local function applyInvis(state)
+	invisible = state
+	invisBtn.Text = invisible and "TÀNG HÌNH: BẬT" or "TÀNG HÌNH: TẮT"
+
+	local char = getChar()
+
+	-- Ẩn/hiện tất cả BasePart trong character (kể cả accessory handle)
+	for _, d in ipairs(char:GetDescendants()) do
+		if d:IsA("BasePart") then
+			setPartInvis(d, invisible)
+		end
+	end
+
+	-- Nếu có Highlight (tuỳ game) thì cũng tắt
+	local hl = char:FindFirstChildOfClass("Highlight")
+	if hl then
+		hl.Enabled = not invisible
+	end
+end
+
 -- ===== EVENTS =====
 toggleFlyBtn.MouseButton1Click:Connect(function()
 	if flying then stopFly() else startFly() end
@@ -271,6 +320,10 @@ teleBtn.MouseButton1Click:Connect(function()
 	hrp.CFrame = findSpawnCFrame()
 end)
 
+invisBtn.MouseButton1Click:Connect(function()
+	applyInvis(not invisible)
+end)
+
 -- Hotkey P ẩn/hiện panel
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
@@ -284,6 +337,10 @@ player.CharacterAdded:Connect(function()
 	task.wait(0.1)
 	applyWalkSpeed()
 	if antiFall then applyAntiFall(true) end
+	if invisible then
+		task.wait(0.2)
+		applyInvis(true)
+	end
 end)
 
 applyWalkSpeed()
