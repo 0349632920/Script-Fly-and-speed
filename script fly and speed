@@ -1,4 +1,7 @@
--- StarterPlayerScripts/AutoPanel_V4_AllInOne.client.lua
+-- StarterPlayerScripts/AutoPanel_V5_AllInOne.client.lua
+-- 1 LocalScript: tự tạo GUI + nút _ (minimize) + X (close)
+-- Fly + chỉnh speed chạy/bay (max 200) + Anti ngã + Hồi máu + Tele về Spawn (xuống 10 rồi lên 10) + Tàng hình
+-- Phím P: ẩn/hiện panel
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,6 +15,10 @@ local playerGui = player:WaitForChild("PlayerGui")
 local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
 local walkSpeed, flySpeed = 16, 60
+
+-- Tele effect: xuống 10 rồi lên 10
+local DOWN_UP_STUDS = 10
+local DOWN_UP_DELAY = 0.2
 
 -- ===== HELPERS =====
 local function new(inst, props, parent)
@@ -27,19 +34,26 @@ local function getHumanoid() return getChar():WaitForChild("Humanoid") end
 local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 
 local function findSpawnCFrame()
+	-- Ưu tiên SpawnLocation
 	local sp = Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
-	if sp and sp:IsA("BasePart") then return sp.CFrame + Vector3.new(0, 6, 0) end
+	if sp and sp:IsA("BasePart") then
+		return sp.CFrame + Vector3.new(0, 6, 0)
+	end
+	-- Fallback theo tên
 	local byName = Workspace:FindFirstChild("Spawn", true) or Workspace:FindFirstChild("SpawnPoint", true)
-	if byName and byName:IsA("BasePart") then return byName.CFrame + Vector3.new(0, 6, 0) end
+	if byName and byName:IsA("BasePart") then
+		return byName.CFrame + Vector3.new(0, 6, 0)
+	end
+	-- Fallback cuối
 	return CFrame.new(0, 50, 0)
 end
 
 -- ===== CLEAN OLD GUI =====
-local old = playerGui:FindFirstChild("AutoPanel_V4")
+local old = playerGui:FindFirstChild("AutoPanel_V5")
 if old then old:Destroy() end
 
 -- ===== CREATE GUI =====
-local gui = new("ScreenGui", {Name="AutoPanel_V4", ResetOnSpawn=false}, playerGui)
+local gui = new("ScreenGui", {Name="AutoPanel_V5", ResetOnSpawn=false}, playerGui)
 
 local panel = new("Frame", {
 	Name="Panel",
@@ -127,13 +141,11 @@ end
 
 -- ===== UI ELEMENTS =====
 local flyBtn = addButton("BẬT BAY", 44)
-
 local walkLabel, walkMinus, walkPlus = addRowLabel(("CHẠY: %d"):format(walkSpeed))
 local flyLabel,  flyMinus,  flyPlus  = addRowLabel(("BAY: %d"):format(flySpeed))
-
 local antiFallBtn = addButton("ANTI NGÃ: TẮT", 40)
 local healBtn     = addButton("HỒI MÁU (MAX)", 40)
-local teleBtn     = addButton("TELE VỀ SPAWN ✅", 40)
+local teleBtn     = addButton("VỀ SPAWN (↓10 rồi ↑10)", 40)
 local invisBtn    = addButton("TÀNG HÌNH: TẮT", 40)
 
 new("TextLabel", {
@@ -141,7 +153,7 @@ new("TextLabel", {
 	Position=UDim2.new(0, 10, 0, y),
 	BackgroundTransparency=1,
 	TextScaled=true,
-	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện panel • _ : thu gọn • X: đóng"
+	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện • _ : thu gọn • X: đóng"
 }, content)
 
 -- ===== APPLY WALK SPEED =====
@@ -231,6 +243,7 @@ local function applyAntiFall(state)
 	end)
 
 	antiHeartbeatConn = RunService.Heartbeat:Connect(function()
+		local hum = getHumanoid()
 		if antiFall and hum and hum.Parent and hum.PlatformStand then
 			hum.PlatformStand = false
 		end
@@ -249,9 +262,7 @@ local function setInvis(state)
 	for _, d in ipairs(char:GetDescendants()) do
 		if d:IsA("BasePart") then
 			if state then
-				if savedLTM[d] == nil then
-					savedLTM[d] = d.LocalTransparencyModifier
-				end
+				if savedLTM[d] == nil then savedLTM[d] = d.LocalTransparencyModifier end
 				d.LocalTransparencyModifier = 1
 			else
 				d.LocalTransparencyModifier = savedLTM[d] or 0
@@ -261,6 +272,20 @@ local function setInvis(state)
 
 	local hl = char:FindFirstChildOfClass("Highlight")
 	if hl then hl.Enabled = not state end
+end
+
+-- ===== TELE (xuống 10 rồi lên 10) =====
+local function teleToSpawnDownUp()
+	stopFly()
+	local hrp = getHRP()
+	local base = findSpawnCFrame()
+
+	hrp.CFrame = base + Vector3.new(0, -DOWN_UP_STUDS, 0)
+	task.delay(DOWN_UP_DELAY, function()
+		if hrp and hrp.Parent then
+			hrp.CFrame = base + Vector3.new(0, DOWN_UP_STUDS, 0)
+		end
+	end)
 end
 
 -- ===== BUTTON EVENTS =====
@@ -298,8 +323,7 @@ healBtn.MouseButton1Click:Connect(function()
 end)
 
 teleBtn.MouseButton1Click:Connect(function()
-	stopFly()
-	getHRP().CFrame = findSpawnCFrame()
+	teleToSpawnDownUp()
 end)
 
 invisBtn.MouseButton1Click:Connect(function()
@@ -352,4 +376,5 @@ player.CharacterAdded:Connect(function()
 	end
 end)
 
+-- Init
 applyWalkSpeed()
