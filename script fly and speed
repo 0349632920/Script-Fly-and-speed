@@ -1,9 +1,6 @@
--- StarterPlayerScripts/AutoPanel_V10_AllInOne_SAFE.client.lua
--- Tele: về spawn -> xuống 10 -> lên 10 (xuống trước, lên sau)
--- GUI tự tạo + _ + X
--- Fly + speed (max 200) + Anti ngã + Heal + Tele SAFE + Unstuck + Tàng hình (local)
--- P: ẩn/hiện panel
--- Không noclip.
+-- StarterPlayerScripts/AutoPanel_V11_AllInOne_SAFE_Raycast.client.lua
+-- Tele: về spawn -> xuống (tìm điểm trống dưới 10 studs) -> lên 10
+-- Không noclip, dùng raycast + kiểm tra khoảng trống
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -44,7 +41,6 @@ local function findSpawnCFrame()
 	return CFrame.new(0, 50, 0)
 end
 
--- Anti-kẹt: thử đặt ở nhiều độ cao quanh spawn để tránh mắc trong tường/sàn
 local function safeSetCFrame(hrp, targetCFrame)
 	if not hrp or not hrp.Parent then return end
 	local rotOnly = targetCFrame - targetCFrame.Position
@@ -61,102 +57,87 @@ local function safeSetCFrame(hrp, targetCFrame)
 	end
 end
 
+-- Tìm vị trí "dưới 10 studs" nhưng không kẹt:
+-- thử nhiều điểm: đúng dưới, rồi lệch x/z một chút, và nhiều mức y
+local function findFreePosNear(pos, char)
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {char}
+
+	local function isFree(p)
+		-- kiểm tra một box nhỏ quanh HRP (đỡ bị kẹt tường)
+		local parts = Workspace:GetPartBoundsInBox(CFrame.new(p), Vector3.new(4, 6, 4), params)
+		return #parts == 0
+	end
+
+	-- danh sách offset để thử
+	local offsets = {
+		Vector3.new(0, 0, 0),
+		Vector3.new(2, 0, 0), Vector3.new(-2, 0, 0),
+		Vector3.new(0, 0, 2), Vector3.new(0, 0, -2),
+		Vector3.new(3, 0, 3), Vector3.new(-3, 0, 3),
+		Vector3.new(3, 0, -3), Vector3.new(-3, 0, -3),
+	}
+
+	-- thử nhiều mức y để tìm chỗ trống
+	for dy = 0, 12 do
+		for _, off in ipairs(offsets) do
+			local p = pos + off + Vector3.new(0, -dy, 0)
+			if isFree(p) then
+				return p
+			end
+		end
+	end
+
+	-- không tìm được thì trả về pos gốc
+	return pos
+end
+
 -- ===== CLEAN OLD GUI =====
-local old = playerGui:FindFirstChild("AutoPanel_V10")
+local old = playerGui:FindFirstChild("AutoPanel_V11")
 if old then old:Destroy() end
 
 -- ===== GUI =====
-local gui = new("ScreenGui", {Name="AutoPanel_V10", ResetOnSpawn=false}, playerGui)
-
-local panel = new("Frame", {
-	Size=UDim2.new(0, 370, 0, 560),
-	Position=UDim2.new(0, 20, 0, 20),
-	BackgroundTransparency=0.15
-}, gui)
-
+local gui = new("ScreenGui", {Name="AutoPanel_V11", ResetOnSpawn=false}, playerGui)
+local panel = new("Frame", {Size=UDim2.new(0,370,0,560), Position=UDim2.new(0,20,0,20), BackgroundTransparency=0.15}, gui)
 local topBar = new("Frame", {Size=UDim2.new(1,0,0,36), BackgroundTransparency=0.25}, panel)
 
 local title = new("TextLabel", {
-	Size=UDim2.new(1, -110, 1, 0),
-	Position=UDim2.new(0, 10, 0, 0),
-	BackgroundTransparency=1,
-	TextScaled=true,
-	TextXAlignment=Enum.TextXAlignment.Left,
-	Text="ADMIN PANEL (SAFE)"
+	Size=UDim2.new(1,-110,1,0), Position=UDim2.new(0,10,0,0),
+	BackgroundTransparency=1, TextScaled=true, TextXAlignment=Enum.TextXAlignment.Left,
+	Text="ADMIN PANEL (SAFE-RAYCAST)"
 }, topBar)
 
-local btnMin = new("TextButton", {
-	Size=UDim2.new(0,45,0,26),
-	Position=UDim2.new(1,-100,0.5,-13),
-	TextScaled=true,
-	Text="_"
-}, topBar)
+local btnMin = new("TextButton", {Size=UDim2.new(0,45,0,26), Position=UDim2.new(1,-100,0.5,-13), TextScaled=true, Text="_"}, topBar)
+local btnClose = new("TextButton", {Size=UDim2.new(0,45,0,26), Position=UDim2.new(1,-50,0.5,-13), TextScaled=true, Text="X"}, topBar)
 
-local btnClose = new("TextButton", {
-	Size=UDim2.new(0,45,0,26),
-	Position=UDim2.new(1,-50,0.5,-13),
-	TextScaled=true,
-	Text="X"
-}, topBar)
-
-local content = new("Frame", {
-	Size=UDim2.new(1,0,1,-36),
-	Position=UDim2.new(0,0,0,36),
-	BackgroundTransparency=1
-}, panel)
+local content = new("Frame", {Size=UDim2.new(1,0,1,-36), Position=UDim2.new(0,0,0,36), BackgroundTransparency=1}, panel)
 
 local y = 10
 local function addButton(text, height)
-	local b = new("TextButton", {
-		Size=UDim2.new(1,-20,0,height),
-		Position=UDim2.new(0,10,0,y),
-		TextScaled=true,
-		Text=text
-	}, content)
+	local b = new("TextButton", {Size=UDim2.new(1,-20,0,height), Position=UDim2.new(0,10,0,y), TextScaled=true, Text=text}, content)
 	y += height + 8
 	return b
 end
 
 local function addRowLabel(labelText)
-	local lbl = new("TextLabel", {
-		Size=UDim2.new(0.55,-15,0,34),
-		Position=UDim2.new(0,10,0,y),
-		BackgroundTransparency=1,
-		TextScaled=true,
-		TextXAlignment=Enum.TextXAlignment.Left,
-		Text=labelText
-	}, content)
-	local minus = new("TextButton", {
-		Size=UDim2.new(0,45,0,34),
-		Position=UDim2.new(0.55,0,0,y),
-		TextScaled=true,
-		Text="-"
-	}, content)
-	local plus = new("TextButton", {
-		Size=UDim2.new(0,45,0,34),
-		Position=UDim2.new(0.55,50,0,y),
-		TextScaled=true,
-		Text="+"
-	}, content)
+	local lbl = new("TextLabel", {Size=UDim2.new(0.55,-15,0,34), Position=UDim2.new(0,10,0,y), BackgroundTransparency=1, TextScaled=true, TextXAlignment=Enum.TextXAlignment.Left, Text=labelText}, content)
+	local minus = new("TextButton", {Size=UDim2.new(0,45,0,34), Position=UDim2.new(0.55,0,0,y), TextScaled=true, Text="-"}, content)
+	local plus  = new("TextButton", {Size=UDim2.new(0,45,0,34), Position=UDim2.new(0.55,50,0,y), TextScaled=true, Text="+"}, content)
 	y += 34 + 8
 	return lbl, minus, plus
 end
 
--- ===== UI =====
 local flyBtn = addButton("BẬT BAY", 44)
 local walkLabel, walkMinus, walkPlus = addRowLabel(("CHẠY: %d"):format(walkSpeed))
 local flyLabel,  flyMinus,  flyPlus  = addRowLabel(("BAY: %d"):format(flySpeed))
 local antiFallBtn = addButton("ANTI NGÃ: TẮT", 40)
 local healBtn     = addButton("HỒI MÁU (MAX)", 40)
-local teleBtn     = addButton("VỀ SPAWN (↓10 rồi ↑10)", 40)
+local teleBtn     = addButton("VỀ SPAWN (xuống TRỐNG dưới 10 → lên 10)", 40)
 local unstuckBtn  = addButton(("THOÁT KẸT (+%d)"):format(UNSTUCK_UP_STUDS), 40)
 local invisBtn    = addButton("TÀNG HÌNH: TẮT", 40)
 
-new("TextLabel", {
-	Size=UDim2.new(1,-20,0,80),
-	Position=UDim2.new(0,10,0,y),
-	BackgroundTransparency=1,
-	TextScaled=true,
+new("TextLabel", {Size=UDim2.new(1,-20,0,80), Position=UDim2.new(0,10,0,y), BackgroundTransparency=1, TextScaled=true,
 	Text="P: ẩn/hiện • _ : thu gọn • X: đóng\nBay: WASD • Space lên • Ctrl xuống"
 }, content)
 
@@ -270,26 +251,31 @@ local function setInvis(state)
 	end
 end
 
--- ===== TELE: spawn -> xuống 10 -> lên 10 =====
-local function teleSpawnDownUp()
+-- ===== TELE: spawn -> xuống "chỗ trống dưới 10" -> lên 10 =====
+local function teleSpawnDownFreeThenUp()
 	stopFly()
 	local hrp = getHRP()
+	local char = getChar()
 
-	-- 1) về spawn (anti-kẹt)
+	-- 1) về spawn (an toàn)
 	local base = findSpawnCFrame()
 	safeSetCFrame(hrp, base)
 
-	-- 2) xuống 10
+	-- 2) xuống: tìm điểm trống gần vị trí (spawn -10)
 	task.delay(STEP_DELAY, function()
 		if not hrp or not hrp.Parent then return end
 		local rot = hrp.CFrame - hrp.CFrame.Position
-		hrp.CFrame = CFrame.new(hrp.Position + Vector3.new(0, -DOWN_STUDS, 0)) * rot
+		local targetDown = hrp.Position + Vector3.new(0, -DOWN_STUDS, 0)
+		local freePos = findFreePosNear(targetDown, char)
+		hrp.CFrame = CFrame.new(freePos) * rot
 
 		-- 3) lên 10
 		task.delay(STEP_DELAY, function()
 			if not hrp or not hrp.Parent then return end
 			local rot2 = hrp.CFrame - hrp.CFrame.Position
-			hrp.CFrame = CFrame.new(hrp.Position + Vector3.new(0, UP_STUDS, 0)) * rot2
+			local upPos = hrp.Position + Vector3.new(0, UP_STUDS, 0)
+			local freeUp = findFreePosNear(upPos, char)
+			hrp.CFrame = CFrame.new(freeUp) * rot2
 		end)
 	end)
 end
@@ -334,11 +320,11 @@ healBtn.MouseButton1Click:Connect(function()
 	hum.Health = hum.MaxHealth
 end)
 
-teleBtn.MouseButton1Click:Connect(teleSpawnDownUp)
+teleBtn.MouseButton1Click:Connect(teleSpawnDownFreeThenUp)
 unstuckBtn.MouseButton1Click:Connect(unstuck)
 invisBtn.MouseButton1Click:Connect(function() setInvis(not invisible) end)
 
--- ===== MINIMIZE / CLOSE =====
+-- Minimize / Close
 local minimized = false
 local fullSize = panel.Size
 local miniSize = UDim2.new(0, 370, 0, 36)
@@ -354,7 +340,7 @@ btnMin.MouseButton1Click:Connect(function()
 		content.Visible = true
 		panel.Size = fullSize
 		btnMin.Text = "_"
-		title.Text = "ADMIN PANEL (SAFE)"
+		title.Text = "ADMIN PANEL (SAFE-RAYCAST)"
 	end
 end)
 
