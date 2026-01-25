@@ -1,4 +1,4 @@
--- StarterPlayerScripts/AutoPanel_FlySpeed_AntiFall_Heal_Tele.client.lua
+-- StarterPlayerScripts/AutoPanel_V2.client.lua
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,14 +8,6 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ===== CONFIG =====
-local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
-local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
-
-local walkSpeed = 16
-local flySpeed = 60
-
--- ===== HELPERS =====
 local function new(inst, props, parent)
 	local obj = Instance.new(inst)
 	for k, v in pairs(props) do obj[k] = v end
@@ -23,159 +15,130 @@ local function new(inst, props, parent)
 	return obj
 end
 
-local function clamp(n, a, b) return math.max(a, math.min(b, n)) end
 local function getChar() return player.Character or player.CharacterAdded:Wait() end
 local function getHumanoid() return getChar():WaitForChild("Humanoid") end
 local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
+local function clamp(n,a,b) return math.max(a, math.min(b,n)) end
+
+local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
+local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
+local walkSpeed, flySpeed = 16, 60
 
 local function findSpawnCFrame()
-	local spawnLoc = Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
-	if spawnLoc and spawnLoc:IsA("BasePart") then
-		return spawnLoc.CFrame + Vector3.new(0, 6, 0)
-	end
+	local sp = Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
+	if sp and sp:IsA("BasePart") then return sp.CFrame + Vector3.new(0, 6, 0) end
 	local byName = Workspace:FindFirstChild("Spawn", true) or Workspace:FindFirstChild("SpawnPoint", true)
-	if byName and byName:IsA("BasePart") then
-		return byName.CFrame + Vector3.new(0, 6, 0)
-	end
+	if byName and byName:IsA("BasePart") then return byName.CFrame + Vector3.new(0, 6, 0) end
 	return CFrame.new(0, 50, 0)
 end
 
--- ===== CLEAN OLD GUI =====
-local old = playerGui:FindFirstChild("AutoFlySpeedGui")
+-- ✅ Xoá GUI cũ nếu có
+local old = playerGui:FindFirstChild("AutoPanel_V2")
 if old then old:Destroy() end
 
--- ===== CREATE GUI =====
-local gui = new("ScreenGui", {Name="AutoFlySpeedGui", ResetOnSpawn=false}, playerGui)
+local gui = new("ScreenGui", {Name="AutoPanel_V2", ResetOnSpawn=false}, playerGui)
 
--- ✅ đặt bên trái cho chắc chắn thấy
 local panel = new("Frame", {
-	Name="ControlPanel",
-	Size=UDim2.new(0, 360, 0, 405),           -- ✅ đủ cao để thấy TELE
-	Position=UDim2.new(0, 20, 0.5, -200),     -- ✅ giữa bên trái
+	Name="Panel",
+	Size=UDim2.new(0, 360, 0, 420),
+	Position=UDim2.new(0, 20, 0, 20), -- ✅ góc trên trái
 	BackgroundTransparency=0.15
 }, gui)
 
-local topBar = new("Frame", {
-	Size=UDim2.new(1, 0, 0, 36),
-	BackgroundTransparency=0.25
-}, panel)
-
-local title = new("TextLabel", {
-	Size=UDim2.new(1, -110, 1, 0),
-	Position=UDim2.new(0, 10, 0, 0),
+new("TextLabel", {
+	Size=UDim2.new(1, -20, 0, 28),
+	Position=UDim2.new(0, 10, 0, 8),
 	BackgroundTransparency=1,
 	TextScaled=true,
-	TextXAlignment=Enum.TextXAlignment.Left,
-	Text="FLY + SPEED"
-}, topBar)
-
-local btnHide = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 26),
-	Position=UDim2.new(1, -100, 0.5, -13),
-	TextScaled=true,
-	Text="_"
-}, topBar)
-
-local btnClose = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 26),
-	Position=UDim2.new(1, -50, 0.5, -13),
-	TextScaled=true,
-	Text="X"
-}, topBar)
-
-local content = new("Frame", {
-	Name="Content",
-	Size=UDim2.new(1, 0, 1, -36),
-	Position=UDim2.new(0, 0, 0, 36),
-	BackgroundTransparency=1
+	Text="FLY + SPEED + ANTI NGÃ + HEAL + TELE"
 }, panel)
 
 local toggleFlyBtn = new("TextButton", {
-	Size=UDim2.new(1, -20, 0, 45),
-	Position=UDim2.new(0, 10, 0, 10),
+	Size=UDim2.new(1, -20, 0, 44),
+	Position=UDim2.new(0, 10, 0, 44),
 	TextScaled=true,
 	Text="BẬT BAY"
-}, content)
+}, panel)
 
--- Row chạy
 local walkLabel = new("TextLabel", {
-	Size=UDim2.new(0.55, -15, 0, 35),
-	Position=UDim2.new(0, 10, 0, 65),
+	Size=UDim2.new(0.55, -15, 0, 34),
+	Position=UDim2.new(0, 10, 0, 96),
 	BackgroundTransparency=1,
 	TextScaled=true,
 	TextXAlignment=Enum.TextXAlignment.Left,
 	Text=("CHẠY: %d"):format(walkSpeed)
-}, content)
+}, panel)
 
 local walkMinus = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 35),
-	Position=UDim2.new(0.55, 0, 0, 65),
+	Size=UDim2.new(0, 45, 0, 34),
+	Position=UDim2.new(0.55, 0, 0, 96),
 	TextScaled=true,
 	Text="-"
-}, content)
+}, panel)
 
 local walkPlus = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 35),
-	Position=UDim2.new(0.55, 50, 0, 65),
+	Size=UDim2.new(0, 45, 0, 34),
+	Position=UDim2.new(0.55, 50, 0, 96),
 	TextScaled=true,
 	Text="+"
-}, content)
+}, panel)
 
--- Row bay
 local flyLabel = new("TextLabel", {
-	Size=UDim2.new(0.55, -15, 0, 35),
-	Position=UDim2.new(0, 10, 0, 105),
+	Size=UDim2.new(0.55, -15, 0, 34),
+	Position=UDim2.new(0, 10, 0, 136),
 	BackgroundTransparency=1,
 	TextScaled=true,
 	TextXAlignment=Enum.TextXAlignment.Left,
 	Text=("BAY: %d"):format(flySpeed)
-}, content)
+}, panel)
 
 local flyMinus = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 35),
-	Position=UDim2.new(0.55, 0, 0, 105),
+	Size=UDim2.new(0, 45, 0, 34),
+	Position=UDim2.new(0.55, 0, 0, 136),
 	TextScaled=true,
 	Text="-"
-}, content)
+}, panel)
 
 local flyPlus = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 35),
-	Position=UDim2.new(0.55, 50, 0, 105),
+	Size=UDim2.new(0, 45, 0, 34),
+	Position=UDim2.new(0.55, 50, 0, 136),
 	TextScaled=true,
 	Text="+"
-}, content)
+}, panel)
 
 local antiFallBtn = new("TextButton", {
 	Size=UDim2.new(1, -20, 0, 40),
-	Position=UDim2.new(0, 10, 0, 150),
+	Position=UDim2.new(0, 10, 0, 180),
 	TextScaled=true,
 	Text="ANTI NGÃ: TẮT"
-}, content)
+}, panel)
 
 local healBtn = new("TextButton", {
 	Size=UDim2.new(1, -20, 0, 40),
-	Position=UDim2.new(0, 10, 0, 195),
+	Position=UDim2.new(0, 10, 0, 225),
 	TextScaled=true,
 	Text="HỒI MÁU (MAX)"
-}, content)
+}, panel)
 
--- ✅ NÚT TELE (đảm bảo nhìn thấy)
+-- ✅ NÚT TELE (có dấu ✅ để dễ thấy)
 local teleBtn = new("TextButton", {
 	Size=UDim2.new(1, -20, 0, 40),
-	Position=UDim2.new(0, 10, 0, 240),
+	Position=UDim2.new(0, 10, 0, 270),
 	TextScaled=true,
-	Text="TELE VỀ SPAWN"
-}, content)
+	Text="TELE VỀ SPAWN ✅"
+}, panel)
 
-local hint = new("TextLabel", {
-	Size=UDim2.new(1, -20, 0, 95),
-	Position=UDim2.new(0, 10, 0, 285),
+print("✅ GUI created. TELE button:", teleBtn:GetFullName())
+
+new("TextLabel", {
+	Size=UDim2.new(1, -20, 0, 90),
+	Position=UDim2.new(0, 10, 0, 320),
 	BackgroundTransparency=1,
 	TextScaled=true,
-	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện panel • _: thu gọn • X: đóng"
-}, content)
+	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện panel"
+}, panel)
 
--- ===== APPLY WALK SPEED =====
+-- ===== WALK SPEED APPLY =====
 local function applyWalkSpeed()
 	local hum = getHumanoid()
 	hum.WalkSpeed = walkSpeed
@@ -199,7 +162,6 @@ local function startFly()
 	if flying then return end
 	flying = true
 	toggleFlyBtn.Text = "TẮT BAY"
-
 	local hrp = getHRP()
 
 	bv = Instance.new("BodyVelocity")
@@ -269,7 +231,7 @@ local function applyAntiFall(state)
 	end)
 end
 
--- ===== UI EVENTS =====
+-- ===== EVENTS =====
 toggleFlyBtn.MouseButton1Click:Connect(function()
 	if flying then stopFly() else startFly() end
 end)
@@ -309,41 +271,14 @@ teleBtn.MouseButton1Click:Connect(function()
 	hrp.CFrame = findSpawnCFrame()
 end)
 
--- Hide/Minimize
-local minimized = false
-local fullSize = panel.Size
-local miniSize = UDim2.new(0, 360, 0, 36)
-
-btnHide.MouseButton1Click:Connect(function()
-	minimized = not minimized
-	if minimized then
-		content.Visible = false
-		panel.Size = miniSize
-		btnHide.Text = "▢"
-		title.Text = "FLY + SPEED (ĐÃ ẨN)"
-	else
-		content.Visible = true
-		panel.Size = fullSize
-		btnHide.Text = "_"
-		title.Text = "FLY + SPEED"
-	end
-end)
-
-btnClose.MouseButton1Click:Connect(function()
-	stopFly()
-	if antiFall then applyAntiFall(false) end
-	gui:Destroy()
-end)
-
 -- Hotkey P ẩn/hiện panel
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then return end
 	if input.KeyCode == Enum.KeyCode.P then
 		panel.Visible = not panel.Visible
 	end
 end)
 
--- Respawn
 player.CharacterAdded:Connect(function()
 	stopFly()
 	task.wait(0.1)
