@@ -1,4 +1,4 @@
--- StarterPlayerScripts/AutoFlySpeed_AntiFall_Heal_TeleSpawn.client.lua
+-- StarterPlayerScripts/AutoPanel_FlySpeed_AntiFall_Heal_Tele.client.lua
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -29,19 +29,14 @@ local function getHumanoid() return getChar():WaitForChild("Humanoid") end
 local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 
 local function findSpawnCFrame()
-	-- Ưu tiên SpawnLocation chuẩn
-	local direct = Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
-	if direct and direct:IsA("BasePart") then
-		return direct.CFrame + Vector3.new(0, 5, 0)
+	local spawnLoc = Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
+	if spawnLoc and spawnLoc:IsA("BasePart") then
+		return spawnLoc.CFrame + Vector3.new(0, 6, 0)
 	end
-
-	-- fallback: nếu có part tên "Spawn" hoặc "SpawnPoint"
 	local byName = Workspace:FindFirstChild("Spawn", true) or Workspace:FindFirstChild("SpawnPoint", true)
 	if byName and byName:IsA("BasePart") then
-		return byName.CFrame + Vector3.new(0, 5, 0)
+		return byName.CFrame + Vector3.new(0, 6, 0)
 	end
-
-	-- fallback cuối: về gần gốc map, nâng lên cao tránh kẹt
 	return CFrame.new(0, 50, 0)
 end
 
@@ -52,10 +47,11 @@ if old then old:Destroy() end
 -- ===== CREATE GUI =====
 local gui = new("ScreenGui", {Name="AutoFlySpeedGui", ResetOnSpawn=false}, playerGui)
 
+-- ✅ đặt bên trái cho chắc chắn thấy
 local panel = new("Frame", {
 	Name="ControlPanel",
-	Size=UDim2.new(0, 360, 0, 365), -- cao hơn để chứa thêm nút tele
-	Position=UDim2.new(1, -390, 1, -415),
+	Size=UDim2.new(0, 360, 0, 405),           -- ✅ đủ cao để thấy TELE
+	Position=UDim2.new(0, 20, 0.5, -200),     -- ✅ giữa bên trái
 	BackgroundTransparency=0.15
 }, gui)
 
@@ -163,20 +159,20 @@ local healBtn = new("TextButton", {
 	Text="HỒI MÁU (MAX)"
 }, content)
 
--- ✅ Nút teleport về spawn
-local teleSpawnBtn = new("TextButton", {
+-- ✅ NÚT TELE (đảm bảo nhìn thấy)
+local teleBtn = new("TextButton", {
 	Size=UDim2.new(1, -20, 0, 40),
 	Position=UDim2.new(0, 10, 0, 240),
 	TextScaled=true,
-	Text="VỀ SPAWN"
+	Text="TELE VỀ SPAWN"
 }, content)
 
 local hint = new("TextLabel", {
-	Size=UDim2.new(1, -20, 0, 45),
+	Size=UDim2.new(1, -20, 0, 95),
 	Position=UDim2.new(0, 10, 0, 285),
 	BackgroundTransparency=1,
 	TextScaled=true,
-	Text="WASD bay • Space lên • Ctrl xuống\nP ẩn/hiện panel"
+	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện panel • _: thu gọn • X: đóng"
 }, content)
 
 -- ===== APPLY WALK SPEED =====
@@ -307,12 +303,10 @@ healBtn.MouseButton1Click:Connect(function()
 	hum.Health = hum.MaxHealth
 end)
 
-teleSpawnBtn.MouseButton1Click:Connect(function()
-	local hrp = getHRP()
-	local cf = findSpawnCFrame()
-	-- để an toàn: tắt fly trước khi tele
+teleBtn.MouseButton1Click:Connect(function()
 	stopFly()
-	hrp.CFrame = cf
+	local hrp = getHRP()
+	hrp.CFrame = findSpawnCFrame()
 end)
 
 -- Hide/Minimize
