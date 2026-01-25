@@ -135,7 +135,7 @@ local antiFallBtn = new("TextButton", {
 	Size=UDim2.new(1, -20, 0, 40),
 	Position=UDim2.new(0, 10, 0, 150),              -- ✅ vị trí rõ ràng
 	TextScaled=true,
-	Text="ANTI NGÃ: TẮT"
+	Text="ANTI Ragdoll: TẮT"
 }, content)
 
 local hint = new("TextLabel", {
@@ -211,7 +211,7 @@ local antiStateConn, antiHeartbeatConn
 
 local function applyAntiFall(state)
 	antiFall = state
-	antiFallBtn.Text = antiFall and "ANTI NGÃ: BẬT" or "ANTI NGÃ: TẮT"
+	antiFallBtn.Text = antiFall and "ANTI Ragdoll: BẬT" or "ANTI Ragdoll: TẮT"
 
 	if antiStateConn then antiStateConn:Disconnect() antiStateConn = nil end
 	if antiHeartbeatConn then antiHeartbeatConn:Disconnect() antiHeartbeatConn = nil end
