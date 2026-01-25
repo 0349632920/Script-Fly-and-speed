@@ -1,8 +1,4 @@
 -- StarterPlayerScripts/OneScript_KeyThenPanels.client.lua
--- 1 script duy nhất: Key GUI -> đúng key -> hiện 2 panel
--- Left: Finite Jump (giới hạn)
--- Right: Fly + WalkSpeed + AntiRagdoll
--- Key: hungscript-3456
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -11,8 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ===== CONFIG =====
-local KEY_OK = "HUNGSCRIPT-3456" -- uppercase compare
+local KEY_OK = "HUNGSCRIPT-3456"
 
 local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
@@ -20,7 +15,6 @@ local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
 local FIN_MAX_LIMIT = 10
 local FIN_BOOST_LIMIT = 200
 
--- ===== HELPERS =====
 local function clamp(n,a,b) return math.max(a, math.min(b,n)) end
 local function getChar() return player.Character or player.CharacterAdded:Wait() end
 local function getHumanoid() return getChar():WaitForChild("Humanoid") end
@@ -33,16 +27,13 @@ local function mk(inst, props, parent)
 	return o
 end
 
--- ===== CLEAN OLD =====
 local old = playerGui:FindFirstChild("OneScriptGUI")
 if old then old:Destroy() end
 
 local gui = mk("ScreenGui", {Name="OneScriptGUI", ResetOnSpawn=false}, playerGui)
 
--- ====== STATE ======
 local access = false
 
--- Right panel state
 local flyEnabled = false
 local walkSpeed = 16
 local flySpeed = 60
@@ -51,7 +42,6 @@ local bv, bg, flyConn
 local antiRagdoll = false
 local antiConn
 
--- Left panel state (Finite Jump)
 local finEnabled = false
 local finMaxAir = 2
 local finBoost = 55
@@ -64,7 +54,7 @@ local function isGrounded(hum)
 		or st == Enum.HumanoidStateType.Landed
 end
 
--- ====== KEY UI ======
+-- KEY UI
 local keyBox = mk("Frame", {
 	Name="KeyBox",
 	Size=UDim2.new(0, 360, 0, 190),
@@ -84,7 +74,7 @@ local input = mk("TextBox", {
 	Size=UDim2.new(1, -20, 0, 42),
 	Position=UDim2.new(0, 10, 0, 55),
 	TextScaled=true,
-	PlaceholderText="Nhập key...",
+	PlaceholderText="Nhập key",
 	ClearTextOnFocus=false,
 	Text=""
 }, keyBox)
@@ -104,7 +94,6 @@ local btn = mk("TextButton", {
 	Text="XÁC NHẬN"
 }, keyBox)
 
--- ====== PANELS (created after key) ======
 local leftPanel, rightPanel
 local finToggle, finMaxLbl, finBoostLbl
 local flyBtn, speedLbl, flySpeedLbl, antiBtn
@@ -459,7 +448,7 @@ btn.MouseButton1Click:Connect(function()
 	local k = (input.Text or ""):upper():gsub("%s+", "")
 	if k == KEY_OK then
 		access = true
-		msg.Text = "✅ KEY ĐÚNG - ĐÃ MỞ"
+		msg.Text = "✅ KEY ĐÚNG"
 		keyBox.Visible = false
 		createPanels()
 	else
