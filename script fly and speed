@@ -1,4 +1,7 @@
--- StarterPlayerScripts/AutoPanel_V6_AllInOne.client.lua
+-- StarterPlayerScripts/AutoPanel_V7_AllInOne_SAFE.client.lua
+-- GUI tự tạo + _ (minimize) + X (close)
+-- Fly + speed (max 200) + Anti ngã + Heal + Tele (↓10 -> về spawn -> ↑10) + Tàng hình (local)
+-- Tele có anti-kẹt (không noclip)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,9 +16,10 @@ local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
 local walkSpeed, flySpeed = 16, 60
 
--- Tele: về spawn rồi nhấc lên 10 studs
-local TELE_UP_STUDS = 10
-local TELE_UP_DELAY = 0.08
+-- Tele effect
+local DOWN_STUDS = 10
+local UP_STUDS   = 10
+local STEP_DELAY = 0.08 -- delay giữa các bước
 
 -- ===== HELPERS =====
 local function new(inst, props, parent)
@@ -42,12 +46,31 @@ local function findSpawnCFrame()
 	return CFrame.new(0, 50, 0)
 end
 
+-- Anti-kẹt: thử đặt ở nhiều độ cao
+local function safeSetCFrame(hrp, targetCFrame)
+	if not hrp or not hrp.Parent then return end
+	local rotOnly = targetCFrame - targetCFrame.Position
+	local basePos = targetCFrame.Position
+
+	-- thử ngay
+	hrp.CFrame = targetCFrame
+	task.wait()
+
+	-- thử nâng dần (để tránh kẹt trong tường/sàn)
+	for i = 1, 15 do
+		if not hrp or not hrp.Parent then return end
+		local tryPos = basePos + Vector3.new(0, i * 3, 0)
+		hrp.CFrame = CFrame.new(tryPos) * rotOnly
+		task.wait()
+	end
+end
+
 -- ===== CLEAN OLD GUI =====
-local old = playerGui:FindFirstChild("AutoPanel_V6")
+local old = playerGui:FindFirstChild("AutoPanel_V7")
 if old then old:Destroy() end
 
 -- ===== CREATE GUI =====
-local gui = new("ScreenGui", {Name="AutoPanel_V6", ResetOnSpawn=false}, playerGui)
+local gui = new("ScreenGui", {Name="AutoPanel_V7", ResetOnSpawn=false}, playerGui)
 
 local panel = new("Frame", {
 	Name="Panel",
@@ -56,9 +79,7 @@ local panel = new("Frame", {
 	BackgroundTransparency=0.15
 }, gui)
 
--- Top bar + _ + X
 local topBar = new("Frame", {
-	Name="TopBar",
 	Size=UDim2.new(1, 0, 0, 36),
 	BackgroundTransparency=0.25
 }, panel)
@@ -69,7 +90,7 @@ local title = new("TextLabel", {
 	BackgroundTransparency=1,
 	TextScaled=true,
 	TextXAlignment=Enum.TextXAlignment.Left,
-	Text="ADMIN PANEL"
+	Text="ADMIN PANEL (SAFE)"
 }, topBar)
 
 local btnMin = new("TextButton", {
@@ -87,7 +108,6 @@ local btnClose = new("TextButton", {
 }, topBar)
 
 local content = new("Frame", {
-	Name="Content",
 	Size=UDim2.new(1, 0, 1, -36),
 	Position=UDim2.new(0, 0, 0, 36),
 	BackgroundTransparency=1
@@ -130,13 +150,13 @@ local function addRowLabel(labelText)
 	return lbl, minus, plus
 end
 
--- ===== UI ELEMENTS =====
+-- ===== UI =====
 local flyBtn = addButton("BẬT BAY", 44)
 local walkLabel, walkMinus, walkPlus = addRowLabel(("CHẠY: %d"):format(walkSpeed))
 local flyLabel,  flyMinus,  flyPlus  = addRowLabel(("BAY: %d"):format(flySpeed))
 local antiFallBtn = addButton("ANTI NGÃ: TẮT", 40)
 local healBtn     = addButton("HỒI MÁU (MAX)", 40)
-local teleBtn     = addButton("VỀ SPAWN (rồi ↑10)", 40)
+local teleBtn     = addButton("VỀ SPAWN (↓10 → spawn → ↑10)", 40)
 local invisBtn    = addButton("TÀNG HÌNH: TẮT", 40)
 
 new("TextLabel", {
@@ -147,7 +167,7 @@ new("TextLabel", {
 	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện • _ : thu gọn • X: đóng"
 }, content)
 
--- ===== APPLY WALK SPEED =====
+-- ===== WALK SPEED =====
 local function applyWalkSpeed()
 	local hum = getHumanoid()
 	hum.WalkSpeed = walkSpeed
@@ -171,6 +191,7 @@ local function startFly()
 	if flying then return end
 	flying = true
 	flyBtn.Text = "TẮT BAY"
+
 	local hrp = getHRP()
 
 	bv = Instance.new("BodyVelocity")
@@ -241,7 +262,7 @@ local function applyAntiFall(state)
 	end)
 end
 
--- ===== INVIS (chỉ ẩn mình) =====
+-- ===== INVIS (local) =====
 local invisible = false
 local savedLTM = {}
 
@@ -260,29 +281,34 @@ local function setInvis(state)
 			end
 		end
 	end
-
-	local hl = char:FindFirstChildOfClass("Highlight")
-	if hl then hl.Enabled = not state end
 end
 
--- ===== TELE: về spawn rồi mới ↑10 =====
-local function teleToSpawnThenUp()
+-- ===== TELE: ↓10 -> spawn -> ↑10 (SAFE) =====
+local function teleDownSpawnUp()
 	stopFly()
 	local hrp = getHRP()
-	local base = findSpawnCFrame()
+	local rot = hrp.CFrame - hrp.CFrame.Position
 
-	-- 1) về spawn trước
-	hrp.CFrame = base
+	-- Bước 1: xuống 10 (theo vị trí hiện tại)
+	local here = hrp.Position
+	hrp.CFrame = CFrame.new(here + Vector3.new(0, -DOWN_STUDS, 0)) * rot
 
-	-- 2) rồi mới nhấc lên 10 studs
-	task.delay(TELE_UP_DELAY, function()
-		if hrp and hrp.Parent then
-			hrp.CFrame = base + Vector3.new(0, TELE_UP_STUDS, 0)
-		end
+	-- Bước 2: về spawn (anti-kẹt)
+	task.delay(STEP_DELAY, function()
+		if not hrp or not hrp.Parent then return end
+		local base = findSpawnCFrame()
+		safeSetCFrame(hrp, base)
+
+		-- Bước 3: lên 10
+		task.delay(STEP_DELAY, function()
+			if not hrp or not hrp.Parent then return end
+			local base2 = findSpawnCFrame()
+			hrp.CFrame = base2 + Vector3.new(0, UP_STUDS, 0)
+		end)
 	end)
 end
 
--- ===== BUTTON EVENTS =====
+-- ===== EVENTS =====
 flyBtn.MouseButton1Click:Connect(function()
 	if flying then stopFly() else startFly() end
 end)
@@ -317,14 +343,14 @@ healBtn.MouseButton1Click:Connect(function()
 end)
 
 teleBtn.MouseButton1Click:Connect(function()
-	teleToSpawnThenUp()
+	teleDownSpawnUp()
 end)
 
 invisBtn.MouseButton1Click:Connect(function()
 	setInvis(not invisible)
 end)
 
--- ===== MINIMIZE + CLOSE =====
+-- Minimize / Close
 local minimized = false
 local fullSize = panel.Size
 local miniSize = UDim2.new(0, 370, 0, 36)
@@ -340,7 +366,7 @@ btnMin.MouseButton1Click:Connect(function()
 		content.Visible = true
 		panel.Size = fullSize
 		btnMin.Text = "_"
-		title.Text = "ADMIN PANEL"
+		title.Text = "ADMIN PANEL (SAFE)"
 	end
 end)
 
@@ -370,5 +396,4 @@ player.CharacterAdded:Connect(function()
 	end
 end)
 
--- Init
 applyWalkSpeed()
