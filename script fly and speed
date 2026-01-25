@@ -1,4 +1,4 @@
--- StarterPlayerScripts/AutoPanel_V3_FlySpeed_AntiFall_Heal_Tele_Invis.client.lua
+-- StarterPlayerScripts/AutoPanel_V4_AllInOne.client.lua
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,6 +8,12 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- ===== CONFIG =====
+local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
+local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
+local walkSpeed, flySpeed = 16, 60
+
+-- ===== HELPERS =====
 local function new(inst, props, parent)
 	local obj = Instance.new(inst)
 	for k, v in pairs(props) do obj[k] = v end
@@ -15,14 +21,10 @@ local function new(inst, props, parent)
 	return obj
 end
 
+local function clamp(n,a,b) return math.max(a, math.min(b,n)) end
 local function getChar() return player.Character or player.CharacterAdded:Wait() end
 local function getHumanoid() return getChar():WaitForChild("Humanoid") end
 local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
-local function clamp(n,a,b) return math.max(a, math.min(b,n)) end
-
-local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
-local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
-local walkSpeed, flySpeed = 16, 60
 
 local function findSpawnCFrame()
 	local sp = Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
@@ -32,118 +34,117 @@ local function findSpawnCFrame()
 	return CFrame.new(0, 50, 0)
 end
 
--- ✅ Xoá GUI cũ nếu có
-local old = playerGui:FindFirstChild("AutoPanel_V3")
+-- ===== CLEAN OLD GUI =====
+local old = playerGui:FindFirstChild("AutoPanel_V4")
 if old then old:Destroy() end
 
-local gui = new("ScreenGui", {Name="AutoPanel_V3", ResetOnSpawn=false}, playerGui)
+-- ===== CREATE GUI =====
+local gui = new("ScreenGui", {Name="AutoPanel_V4", ResetOnSpawn=false}, playerGui)
 
 local panel = new("Frame", {
 	Name="Panel",
-	Size=UDim2.new(0, 360, 0, 470), -- cao hơn để có nút tàng hình
+	Size=UDim2.new(0, 370, 0, 520),
 	Position=UDim2.new(0, 20, 0, 20),
 	BackgroundTransparency=0.15
 }, gui)
 
-new("TextLabel", {
-	Size=UDim2.new(1, -20, 0, 28),
-	Position=UDim2.new(0, 10, 0, 8),
-	BackgroundTransparency=1,
-	TextScaled=true,
-	Text="FLY + SPEED + ANTI NGÃ + HEAL + TELE + INVIS"
+-- Top bar + _ + X
+local topBar = new("Frame", {
+	Name="TopBar",
+	Size=UDim2.new(1, 0, 0, 36),
+	Position=UDim2.new(0, 0, 0, 0),
+	BackgroundTransparency=0.25
 }, panel)
 
-local toggleFlyBtn = new("TextButton", {
-	Size=UDim2.new(1, -20, 0, 44),
-	Position=UDim2.new(0, 10, 0, 44),
-	TextScaled=true,
-	Text="BẬT BAY"
-}, panel)
-
-local walkLabel = new("TextLabel", {
-	Size=UDim2.new(0.55, -15, 0, 34),
-	Position=UDim2.new(0, 10, 0, 96),
+local title = new("TextLabel", {
+	Size=UDim2.new(1, -110, 1, 0),
+	Position=UDim2.new(0, 10, 0, 0),
 	BackgroundTransparency=1,
 	TextScaled=true,
 	TextXAlignment=Enum.TextXAlignment.Left,
-	Text=("CHẠY: %d"):format(walkSpeed)
+	Text="ADMIN PANEL"
+}, topBar)
+
+local btnMin = new("TextButton", {
+	Name="MinBtn",
+	Size=UDim2.new(0, 45, 0, 26),
+	Position=UDim2.new(1, -100, 0.5, -13),
+	TextScaled=true,
+	Text="_"
+}, topBar)
+
+local btnClose = new("TextButton", {
+	Name="CloseBtn",
+	Size=UDim2.new(0, 45, 0, 26),
+	Position=UDim2.new(1, -50, 0.5, -13),
+	TextScaled=true,
+	Text="X"
+}, topBar)
+
+local content = new("Frame", {
+	Name="Content",
+	Size=UDim2.new(1, 0, 1, -36),
+	Position=UDim2.new(0, 0, 0, 36),
+	BackgroundTransparency=1
 }, panel)
 
-local walkMinus = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 34),
-	Position=UDim2.new(0.55, 0, 0, 96),
-	TextScaled=true,
-	Text="-"
-}, panel)
+local y = 10
+local function addButton(text, height)
+	local b = new("TextButton", {
+		Size=UDim2.new(1, -20, 0, height),
+		Position=UDim2.new(0, 10, 0, y),
+		TextScaled=true,
+		Text=text
+	}, content)
+	y += height + 8
+	return b
+end
 
-local walkPlus = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 34),
-	Position=UDim2.new(0.55, 50, 0, 96),
-	TextScaled=true,
-	Text="+"
-}, panel)
+local function addRowLabel(labelText)
+	local lbl = new("TextLabel", {
+		Size=UDim2.new(0.55, -15, 0, 34),
+		Position=UDim2.new(0, 10, 0, y),
+		BackgroundTransparency=1,
+		TextScaled=true,
+		TextXAlignment=Enum.TextXAlignment.Left,
+		Text=labelText
+	}, content)
+	local minus = new("TextButton", {
+		Size=UDim2.new(0, 45, 0, 34),
+		Position=UDim2.new(0.55, 0, 0, y),
+		TextScaled=true,
+		Text="-"
+	}, content)
+	local plus = new("TextButton", {
+		Size=UDim2.new(0, 45, 0, 34),
+		Position=UDim2.new(0.55, 50, 0, y),
+		TextScaled=true,
+		Text="+"
+	}, content)
+	y += 34 + 8
+	return lbl, minus, plus
+end
 
-local flyLabel = new("TextLabel", {
-	Size=UDim2.new(0.55, -15, 0, 34),
-	Position=UDim2.new(0, 10, 0, 136),
-	BackgroundTransparency=1,
-	TextScaled=true,
-	TextXAlignment=Enum.TextXAlignment.Left,
-	Text=("BAY: %d"):format(flySpeed)
-}, panel)
+-- ===== UI ELEMENTS =====
+local flyBtn = addButton("BẬT BAY", 44)
 
-local flyMinus = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 34),
-	Position=UDim2.new(0.55, 0, 0, 136),
-	TextScaled=true,
-	Text="-"
-}, panel)
+local walkLabel, walkMinus, walkPlus = addRowLabel(("CHẠY: %d"):format(walkSpeed))
+local flyLabel,  flyMinus,  flyPlus  = addRowLabel(("BAY: %d"):format(flySpeed))
 
-local flyPlus = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 34),
-	Position=UDim2.new(0.55, 50, 0, 136),
-	TextScaled=true,
-	Text="+"
-}, panel)
-
-local antiFallBtn = new("TextButton", {
-	Size=UDim2.new(1, -20, 0, 40),
-	Position=UDim2.new(0, 10, 0, 180),
-	TextScaled=true,
-	Text="ANTI NGÃ: TẮT"
-}, panel)
-
-local healBtn = new("TextButton", {
-	Size=UDim2.new(1, -20, 0, 40),
-	Position=UDim2.new(0, 10, 0, 225),
-	TextScaled=true,
-	Text="HỒI MÁU (MAX)"
-}, panel)
-
-local teleBtn = new("TextButton", {
-	Size=UDim2.new(1, -20, 0, 40),
-	Position=UDim2.new(0, 10, 0, 270),
-	TextScaled=true,
-	Text="TELE VỀ SPAWN ✅"
-}, panel)
-
--- ✅ NÚT TÀNG HÌNH
-local invisBtn = new("TextButton", {
-	Size=UDim2.new(1, -20, 0, 40),
-	Position=UDim2.new(0, 10, 0, 315),
-	TextScaled=true,
-	Text="TÀNG HÌNH: TẮT"
-}, panel)
+local antiFallBtn = addButton("ANTI NGÃ: TẮT", 40)
+local healBtn     = addButton("HỒI MÁU (MAX)", 40)
+local teleBtn     = addButton("TELE VỀ SPAWN ✅", 40)
+local invisBtn    = addButton("TÀNG HÌNH: TẮT", 40)
 
 new("TextLabel", {
-	Size=UDim2.new(1, -20, 0, 110),
-	Position=UDim2.new(0, 10, 0, 360),
+	Size=UDim2.new(1, -20, 0, 90),
+	Position=UDim2.new(0, 10, 0, y),
 	BackgroundTransparency=1,
 	TextScaled=true,
-	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện panel"
-}, panel)
+	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện panel • _ : thu gọn • X: đóng"
+}, content)
 
--- ===== WALK SPEED APPLY =====
+-- ===== APPLY WALK SPEED =====
 local function applyWalkSpeed()
 	local hum = getHumanoid()
 	hum.WalkSpeed = walkSpeed
@@ -157,7 +158,7 @@ local bv, bg, flyConn
 local function stopFly()
 	if not flying then return end
 	flying = false
-	toggleFlyBtn.Text = "BẬT BAY"
+	flyBtn.Text = "BẬT BAY"
 	if flyConn then flyConn:Disconnect() flyConn = nil end
 	if bv then bv:Destroy() bv = nil end
 	if bg then bg:Destroy() bg = nil end
@@ -166,7 +167,7 @@ end
 local function startFly()
 	if flying then return end
 	flying = true
-	toggleFlyBtn.Text = "TẮT BAY"
+	flyBtn.Text = "TẮT BAY"
 	local hrp = getHRP()
 
 	bv = Instance.new("BodyVelocity")
@@ -236,52 +237,34 @@ local function applyAntiFall(state)
 	end)
 end
 
--- ===== INVIS (chỉ ẩn nhân vật của mình) =====
+-- ===== INVIS (chỉ ẩn mình) =====
 local invisible = false
-local saved = {} -- [Instance] = {Transparency=?, LocalTransparencyModifier=?}
+local savedLTM = {}
 
-local function setPartInvis(part, on)
-	if not part:IsA("BasePart") then return end
-	if on then
-		if not saved[part] then
-			saved[part] = {
-				T = part.Transparency,
-				LTM = part.LocalTransparencyModifier
-			}
-		end
-		part.LocalTransparencyModifier = 1
-	else
-		local s = saved[part]
-		if s then
-			part.LocalTransparencyModifier = s.LTM
-		else
-			part.LocalTransparencyModifier = 0
-		end
-	end
-end
-
-local function applyInvis(state)
+local function setInvis(state)
 	invisible = state
 	invisBtn.Text = invisible and "TÀNG HÌNH: BẬT" or "TÀNG HÌNH: TẮT"
-
 	local char = getChar()
 
-	-- Ẩn/hiện tất cả BasePart trong character (kể cả accessory handle)
 	for _, d in ipairs(char:GetDescendants()) do
 		if d:IsA("BasePart") then
-			setPartInvis(d, invisible)
+			if state then
+				if savedLTM[d] == nil then
+					savedLTM[d] = d.LocalTransparencyModifier
+				end
+				d.LocalTransparencyModifier = 1
+			else
+				d.LocalTransparencyModifier = savedLTM[d] or 0
+			end
 		end
 	end
 
-	-- Nếu có Highlight (tuỳ game) thì cũng tắt
 	local hl = char:FindFirstChildOfClass("Highlight")
-	if hl then
-		hl.Enabled = not invisible
-	end
+	if hl then hl.Enabled = not state end
 end
 
--- ===== EVENTS =====
-toggleFlyBtn.MouseButton1Click:Connect(function()
+-- ===== BUTTON EVENTS =====
+flyBtn.MouseButton1Click:Connect(function()
 	if flying then stopFly() else startFly() end
 end)
 
@@ -316,12 +299,37 @@ end)
 
 teleBtn.MouseButton1Click:Connect(function()
 	stopFly()
-	local hrp = getHRP()
-	hrp.CFrame = findSpawnCFrame()
+	getHRP().CFrame = findSpawnCFrame()
 end)
 
 invisBtn.MouseButton1Click:Connect(function()
-	applyInvis(not invisible)
+	setInvis(not invisible)
+end)
+
+-- ===== MINIMIZE + CLOSE =====
+local minimized = false
+local fullSize = panel.Size
+local miniSize = UDim2.new(0, 370, 0, 36)
+
+btnMin.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	if minimized then
+		content.Visible = false
+		panel.Size = miniSize
+		btnMin.Text = "▢"
+		title.Text = "ADMIN PANEL (ĐÃ ẨN)"
+	else
+		content.Visible = true
+		panel.Size = fullSize
+		btnMin.Text = "_"
+		title.Text = "ADMIN PANEL"
+	end
+end)
+
+btnClose.MouseButton1Click:Connect(function()
+	stopFly()
+	if antiFall then applyAntiFall(false) end
+	gui:Destroy()
 end)
 
 -- Hotkey P ẩn/hiện panel
@@ -332,6 +340,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
 	end
 end)
 
+-- Respawn
 player.CharacterAdded:Connect(function()
 	stopFly()
 	task.wait(0.1)
@@ -339,7 +348,7 @@ player.CharacterAdded:Connect(function()
 	if antiFall then applyAntiFall(true) end
 	if invisible then
 		task.wait(0.2)
-		applyInvis(true)
+		setInvis(true)
 	end
 end)
 
