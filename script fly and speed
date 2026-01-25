@@ -17,7 +17,6 @@ local KEY_OK = "HUNGSCRIPT-3456" -- uppercase compare
 local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
 
--- Finite Jump limits
 local FIN_MAX_LIMIT = 10
 local FIN_BOOST_LIMIT = 200
 
@@ -85,7 +84,7 @@ local input = mk("TextBox", {
 	Size=UDim2.new(1, -20, 0, 42),
 	Position=UDim2.new(0, 10, 0, 55),
 	TextScaled=true,
-	PlaceholderText="Ví dụ: hungscript-3456",
+	PlaceholderText="Nhập key...",
 	ClearTextOnFocus=false,
 	Text=""
 }, keyBox)
@@ -205,7 +204,6 @@ local function hookGroundReset()
 end
 
 local function createPanels()
-	-- LEFT: Finite Jump
 	leftPanel = mk("Frame", {
 		Name="LeftPanel",
 		Size=UDim2.new(0, 320, 0, 220),
@@ -282,7 +280,6 @@ local function createPanels()
 		Text="P: ẩn/hiện 2 bảng"
 	}, leftPanel)
 
-	-- RIGHT: Fly + Speed + AntiRagdoll
 	rightPanel = mk("Frame", {
 		Name="RightPanel",
 		Size=UDim2.new(0, 320, 0, 250),
@@ -366,7 +363,6 @@ local function createPanels()
 		Text="Bay: WASD • Space lên • Ctrl xuống"
 	}, rightPanel)
 
-	-- ---- Events ----
 	finToggle.MouseButton1Click:Connect(function()
 		finEnabled = not finEnabled
 		refreshFiniteUI()
@@ -421,7 +417,6 @@ local function createPanels()
 	setAntiRagdoll(false)
 end
 
--- Hotkey P: toggle panels (after access)
 UserInputService.InputBegan:Connect(function(inputObj, gp)
 	if gp then return end
 
@@ -432,7 +427,6 @@ UserInputService.InputBegan:Connect(function(inputObj, gp)
 		return
 	end
 
-	-- Finite jump behavior (after access + enabled)
 	if inputObj.KeyCode == Enum.KeyCode.Space and access and finEnabled then
 		local hum = getHumanoid()
 		local hrp = getHRP()
@@ -450,10 +444,8 @@ UserInputService.InputBegan:Connect(function(inputObj, gp)
 	end
 end)
 
--- Reset air jumps when grounded
 hookGroundReset()
 
--- Respawn handling
 player.CharacterAdded:Connect(function()
 	stopFly()
 	task.wait(0.1)
@@ -463,7 +455,6 @@ player.CharacterAdded:Connect(function()
 	hookGroundReset()
 end)
 
--- Key check
 btn.MouseButton1Click:Connect(function()
 	local k = (input.Text or ""):upper():gsub("%s+", "")
 	if k == KEY_OK then
