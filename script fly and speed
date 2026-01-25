@@ -1,4 +1,6 @@
--- StarterPlayerScripts/AutoCreateGuiFlySpeed.client.lua  (LocalScript)
+-- StarterPlayerScripts/AutoAdminPanel_FlySpeed_AntiFall.client.lua
+-- 1 LocalScript duy nhất: tự tạo GUI + Fly + chỉnh tốc độ chạy/bay + ẨN/ĐÓNG + Anti ngã
+-- Lưu ý: Đây là client-side.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -38,60 +40,11 @@ local function getHRP()
 	return getChar():WaitForChild("HumanoidRootPart")
 end
 
--- ===== FLY LOGIC =====
-local flying = false
-local bv, bg, conn
-
-local function stopFly()
-	if not flying then return end
-	flying = false
-	if conn then conn:Disconnect() conn = nil end
-	if bv then bv:Destroy() bv = nil end
-	if bg then bg:Destroy() bg = nil end
-end
-
-local function startFly(toggleBtn)
-	if flying then return end
-	flying = true
-
-	local hrp = getHRP()
-
-	bv = Instance.new("BodyVelocity")
-	bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-	bv.Velocity = Vector3.zero
-	bv.Parent = hrp
-
-	bg = Instance.new("BodyGyro")
-	bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-	bg.P = 9e4
-	bg.CFrame = hrp.CFrame
-	bg.Parent = hrp
-
-	conn = RunService.RenderStepped:Connect(function()
-		local cam = workspace.CurrentCamera
-		if not cam or not hrp then return end
-
-		local move = Vector3.zero
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0, 1, 0) end
-
-		if move.Magnitude > 0 then
-			move = move.Unit * flySpeed
-		end
-
-		bv.Velocity = move
-		bg.CFrame = cam.CFrame
-	end)
-end
-
--- ===== CREATE GUI (AUTO) =====
+-- ===== CLEAN OLD GUI =====
 local old = playerGui:FindFirstChild("AutoFlySpeedGui")
 if old then old:Destroy() end
 
+-- ===== CREATE GUI =====
 local gui = new("ScreenGui", {
 	Name = "AutoFlySpeedGui",
 	ResetOnSpawn = false
@@ -99,8 +52,8 @@ local gui = new("ScreenGui", {
 
 local panel = new("Frame", {
 	Name = "ControlPanel",
-	Size = UDim2.new(0, 350, 0, 200),
-	Position = UDim2.new(1, -370, 1, -240),
+	Size = UDim2.new(0, 350, 0, 240),
+	Position = UDim2.new(1, -370, 1, -280),
 	BackgroundTransparency = 0.15
 }, gui)
 
@@ -137,7 +90,7 @@ local btnClose = new("TextButton", {
 	Text = "X"
 }, topBar)
 
--- Content frame (phần sẽ ẩn/hiện)
+-- Content
 local content = new("Frame", {
 	Name = "Content",
 	Size = UDim2.new(1, 0, 1, -36),
@@ -200,9 +153,16 @@ local flyPlus = new("TextButton", {
 	Text = "+"
 }, content)
 
+local antiFallBtn = new("TextButton", {
+	Size = UDim2.new(1, -20, 0, 35),
+	Position = UDim2.new(0, 10, 0, 145),
+	TextScaled = true,
+	Text = "ANTI NGÃ: TẮT"
+}, content)
+
 local hint = new("TextLabel", {
 	Size = UDim2.new(1, -20, 0, 30),
-	Position = UDim2.new(0, 10, 0, 145),
+	Position = UDim2.new(0, 10, 0, 185),
 	BackgroundTransparency = 1,
 	TextScaled = true,
 	Text = "WASD bay • Space lên • Ctrl xuống"
@@ -215,15 +175,99 @@ local function applyWalkSpeed()
 	walkLabel.Text = ("CHẠY: %d"):format(walkSpeed)
 end
 
--- ===== BUTTON EVENTS =====
-toggleFlyBtn.MouseButton1Click:Connect(function()
-	if flying then
-		stopFly()
-		toggleFlyBtn.Text = "BẬT BAY"
-	else
-		startFly()
-		toggleFlyBtn.Text = "TẮT BAY"
+-- ===== FLY LOGIC =====
+local flying = false
+local bv, bg, flyConn
+
+local function stopFlyUI()
+	if not flying then return end
+	flying = false
+	toggleFlyBtn.Text = "BẬT BAY"
+	if flyConn then flyConn:Disconnect() flyConn = nil end
+	if bv then bv:Destroy() bv = nil end
+	if bg then bg:Destroy() bg = nil end
+end
+
+local function startFlyUI()
+	if flying then return end
+	flying = true
+	toggleFlyBtn.Text = "TẮT BAY"
+
+	local hrp = getHRP()
+
+	bv = Instance.new("BodyVelocity")
+	bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+	bv.Velocity = Vector3.zero
+	bv.Parent = hrp
+
+	bg = Instance.new("BodyGyro")
+	bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+	bg.P = 9e4
+	bg.CFrame = hrp.CFrame
+	bg.Parent = hrp
+
+	flyConn = RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera
+		if not cam or not hrp then return end
+
+		local move = Vector3.zero
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0, 1, 0) end
+
+		if move.Magnitude > 0 then
+			move = move.Unit * flySpeed
+		end
+
+		bv.Velocity = move
+		bg.CFrame = cam.CFrame
+	end)
+end
+
+-- ===== ANTI FALL LOGIC =====
+local antiFall = false
+local antiStateConn
+local antiHeartbeatConn
+
+local function applyAntiFall(state)
+	antiFall = state
+	antiFallBtn.Text = antiFall and "ANTI NGÃ: BẬT" or "ANTI NGÃ: TẮT"
+
+	if antiStateConn then antiStateConn:Disconnect() antiStateConn = nil end
+	if antiHeartbeatConn then antiHeartbeatConn:Disconnect() antiHeartbeatConn = nil end
+
+	local hum = getHumanoid()
+	hum.PlatformStand = false
+
+	if not antiFall then
+		return
 	end
+
+	antiStateConn = hum.StateChanged:Connect(function(_, newState)
+		if not antiFall then return end
+		if newState == Enum.HumanoidStateType.FallingDown
+			or newState == Enum.HumanoidStateType.Ragdoll
+			or newState == Enum.HumanoidStateType.Physics then
+			pcall(function()
+				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+				hum:ChangeState(Enum.HumanoidStateType.Running)
+			end)
+		end
+	end)
+
+	antiHeartbeatConn = RunService.Heartbeat:Connect(function()
+		if antiFall and hum and hum.Parent and hum.PlatformStand then
+			hum.PlatformStand = false
+		end
+	end)
+end
+
+-- ===== EVENTS =====
+toggleFlyBtn.MouseButton1Click:Connect(function()
+	if flying then stopFlyUI() else startFlyUI() end
 end)
 
 walkMinus.MouseButton1Click:Connect(function()
@@ -246,7 +290,11 @@ flyPlus.MouseButton1Click:Connect(function()
 	flyLabel.Text = ("BAY: %d"):format(flySpeed)
 end)
 
--- ===== HIDE / SHOW =====
+antiFallBtn.MouseButton1Click:Connect(function()
+	applyAntiFall(not antiFall)
+end)
+
+-- Hide/Show (minimize)
 local minimized = false
 local fullSize = panel.Size
 local miniSize = UDim2.new(0, 350, 0, 36)
@@ -256,12 +304,12 @@ local function setMinimized(state)
 	if minimized then
 		content.Visible = false
 		panel.Size = miniSize
-		btnHide.Text = "▢" -- mở lại
+		btnHide.Text = "▢"
 		title.Text = "FLY + SPEED (ĐÃ ẨN)"
 	else
 		content.Visible = true
 		panel.Size = fullSize
-		btnHide.Text = "-"
+		btnHide.Text = "_"
 		title.Text = "FLY + SPEED"
 	end
 end
@@ -270,20 +318,30 @@ btnHide.MouseButton1Click:Connect(function()
 	setMinimized(not minimized)
 end)
 
--- Close: xoá GUI + tắt bay luôn
+-- Close (destroy UI + stop fly)
 btnClose.MouseButton1Click:Connect(function()
-	stopFly()
+	stopFlyUI()
+	if antiFall then applyAntiFall(false) end
 	gui:Destroy()
 end)
 
--- Respawn: tắt bay, set lại speed
-player.CharacterAdded:Connect(function()
-	stopFly()
-	if toggleFlyBtn and toggleFlyBtn.Parent then
-		toggleFlyBtn.Text = "BẬT BAY"
+-- Hotkey P ẩn/hiện panel
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.P then
+		panel.Visible = not panel.Visible
 	end
-	task.wait(0.1)
-	applyWalkSpeed()
 end)
 
+-- Respawn handling
+player.CharacterAdded:Connect(function()
+	stopFlyUI()
+	task.wait(0.1)
+	applyWalkSpeed()
+	if antiFall then
+		applyAntiFall(true)
+	end
+end)
+
+-- Init
 applyWalkSpeed()
