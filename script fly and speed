@@ -1,11 +1,23 @@
--- StarterPlayerScripts/OneScript_KeyThenPanels_GhostMode.client.lua
+-- StarterPlayerScripts/OneScript_KeyThenPanels_GhostMode_Training_Loaded.client.lua
+-- 1 LocalScript duy nhất: Key -> 2 GUI (Finite Jump + Fly/Speed/AntiRagdoll/GhostMode/TrainingMode) + thông báo load xong
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+
+local function notify(title, text, seconds)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = title or "DONE",
+			Text = text or "Script đã load xong",
+			Duration = seconds or 3
+		})
+	end)
+end
 
 local KEY_OK = "HUNGSCRIPT-3456"
 
@@ -27,10 +39,12 @@ local function mk(inst, props, parent)
 	return o
 end
 
+-- Clean old
 local old = playerGui:FindFirstChild("OneScriptGUI")
 if old then old:Destroy() end
 local gui = mk("ScreenGui", {Name="OneScriptGUI", ResetOnSpawn=false}, playerGui)
 
+-- ===== STATE =====
 local access = false
 
 -- Fly
@@ -49,11 +63,15 @@ local finMaxAir = 2
 local finBoost = 55
 local usedAir = 0
 
--- Ghost mode
+-- Ghost mode (auto-lách khi kẹt) + Ghost step (bấm)
 local ghostEnabled = false
 local ghostConn
 local lastPos
 local stuckTime = 0
+
+-- Training Mode (chỉ trong SafeZone)
+local trainingEnabled = false
+local trainingConn
 
 local function isGrounded(hum)
 	local st = hum:GetState()
@@ -62,6 +80,7 @@ local function isGrounded(hum)
 		or st == Enum.HumanoidStateType.Landed
 end
 
+-- ===== Fly =====
 local function stopFly()
 	if not flyEnabled then return end
 	flyEnabled = false
@@ -109,6 +128,7 @@ local function applyWalkSpeed()
 	hum.WalkSpeed = walkSpeed
 end
 
+-- ===== Anti Ragdoll =====
 local function setAntiRagdoll(state)
 	antiRagdoll = state
 	if antiConn then antiConn:Disconnect() antiConn = nil end
@@ -131,6 +151,7 @@ local function setAntiRagdoll(state)
 	end)
 end
 
+-- ===== Finite Jump =====
 local function hookGroundReset()
 	local hum = getHumanoid()
 	hum.StateChanged:Connect(function(_, newState)
@@ -142,6 +163,7 @@ local function hookGroundReset()
 	end)
 end
 
+-- ===== Ghost Step + Ghost Mode =====
 local function GhostStep(studs)
 	studs = studs or 6
 	local char = player.Character
@@ -178,7 +200,6 @@ local function setGhostMode(state)
 	if ghostConn then ghostConn:Disconnect() ghostConn = nil end
 	lastPos = nil
 	stuckTime = 0
-
 	if not ghostEnabled then return end
 
 	ghostConn = RunService.Heartbeat:Connect(function(dt)
@@ -188,14 +209,13 @@ local function setGhostMode(state)
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if not hrp or not hum then return end
 
-		-- chỉ hỗ trợ khi đang đi bộ (không can thiệp khi bay)
+		-- không can thiệp khi đang bay
 		if flyEnabled then
 			lastPos = hrp.Position
 			stuckTime = 0
 			return
 		end
 
-		-- nếu đang bấm WASD mà đứng yên quá lâu => coi như kẹt => tự GhostStep nhỏ
 		local movingKey =
 			UserInputService:IsKeyDown(Enum.KeyCode.W) or
 			UserInputService:IsKeyDown(Enum.KeyCode.A) or
@@ -228,7 +248,36 @@ local function setGhostMode(state)
 	end)
 end
 
--- ===== KEY UI =====
+-- ===== Training Mode (SafeZone) =====
+local function inSafeZone()
+	local zone = workspace:FindFirstChild("SafeZone")
+	if not zone or not zone:IsA("BasePart") then return false end
+	local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return false end
+
+	local lp = zone.CFrame:PointToObjectSpace(hrp.Position)
+	return math.abs(lp.X) <= zone.Size.X/2
+		and math.abs(lp.Y) <= zone.Size.Y/2
+		and math.abs(lp.Z) <= zone.Size.Z/2
+end
+
+local function setTrainingMode(state)
+	trainingEnabled = state
+	if trainingConn then trainingConn:Disconnect() trainingConn = nil end
+	if not trainingEnabled then return end
+
+	trainingConn = RunService.Heartbeat:Connect(function()
+		local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if not hum then return end
+		if inSafeZone() then
+			if hum.Health < hum.MaxHealth then
+				hum.Health = hum.MaxHealth
+			end
+		end
+	end)
+end
+
+-- ===== UI: KEY =====
 local keyBox = mk("Frame", {
 	Name="KeyBox",
 	Size=UDim2.new(0, 360, 0, 190),
@@ -268,15 +317,13 @@ local btn = mk("TextButton", {
 	Text="XÁC NHẬN"
 }, keyBox)
 
--- Panels refs
+-- ===== Panels refs =====
 local leftPanel, rightPanel
 local finToggle, finMaxLbl, finBoostLbl
-local flyBtn, speedLbl, flySpeedLbl, antiBtn, ghostBtn, ghostStepBtn
+local flyBtn, speedLbl, flySpeedLbl, antiBtn, ghostBtn, ghostStepBtn, trainingBtn
 
 local function refreshFiniteUI()
-	if finToggle then
-		finToggle.Text = finEnabled and "FINITE JUMP: BẬT" or "FINITE JUMP: TẮT"
-	end
+	if finToggle then finToggle.Text = finEnabled and "FINITE JUMP: BẬT" or "FINITE JUMP: TẮT" end
 	if finMaxLbl then finMaxLbl.Text = ("SỐ NHẢY: %d"):format(finMaxAir) end
 	if finBoostLbl then finBoostLbl.Text = ("LỰC NHẢY: %d"):format(finBoost) end
 end
@@ -287,6 +334,7 @@ local function refreshRightUI()
 	if flySpeedLbl then flySpeedLbl.Text = ("FLY SPEED: %d"):format(flySpeed) end
 	if antiBtn then antiBtn.Text = antiRagdoll and "ANTI RAGDOLL: BẬT" or "ANTI RAGDOLL: TẮT" end
 	if ghostBtn then ghostBtn.Text = ghostEnabled and "GHOST MODE: BẬT" or "GHOST MODE: TẮT" end
+	if trainingBtn then trainingBtn.Text = trainingEnabled and "TRAINING MODE: BẬT" or "TRAINING MODE: TẮT" end
 end
 
 local function createPanels()
@@ -368,7 +416,7 @@ local function createPanels()
 	-- RIGHT
 	rightPanel = mk("Frame", {
 		Name="RightPanel",
-		Size=UDim2.new(0, 320, 0, 340),
+		Size=UDim2.new(0, 320, 0, 380),
 		Position=UDim2.new(1, -340, 0, 20),
 		BackgroundTransparency=0.15
 	}, gui)
@@ -451,9 +499,15 @@ local function createPanels()
 		Text="GHOST STEP"
 	}, rightPanel)
 
+	trainingBtn = mk("TextButton", {
+		Size=UDim2.new(1, -20, 0, 38),
+		Position=UDim2.new(0, 10, 0, 304),
+		TextScaled=true
+	}, rightPanel)
+
 	mk("TextLabel", {
 		Size=UDim2.new(1, -20, 0, 30),
-		Position=UDim2.new(0, 10, 0, 304),
+		Position=UDim2.new(0, 10, 0, 346),
 		BackgroundTransparency=1,
 		TextScaled=true,
 		Text="Bay: WASD • Space lên • Ctrl xuống"
@@ -522,14 +576,20 @@ local function createPanels()
 		GhostStep(6)
 	end)
 
+	trainingBtn.MouseButton1Click:Connect(function()
+		setTrainingMode(not trainingEnabled)
+		refreshRightUI()
+	end)
+
 	refreshFiniteUI()
 	applyWalkSpeed()
 	setAntiRagdoll(false)
 	setGhostMode(false)
+	setTrainingMode(false)
 	refreshRightUI()
 end
 
--- Input: P toggle panels + Finite Jump
+-- Input
 UserInputService.InputBegan:Connect(function(inputObj, gp)
 	if gp then return end
 
@@ -562,14 +622,19 @@ hookGroundReset()
 player.CharacterAdded:Connect(function()
 	stopFly()
 	if ghostConn then ghostConn:Disconnect() ghostConn = nil end
+	if trainingConn then trainingConn:Disconnect() trainingConn = nil end
+
 	task.wait(0.1)
 	applyWalkSpeed()
 	if antiRagdoll then setAntiRagdoll(true) end
 	if ghostEnabled then setGhostMode(true) end
+	if trainingEnabled then setTrainingMode(true) end
+
 	usedAir = 0
 	hookGroundReset()
 end)
 
+-- Key
 btn.MouseButton1Click:Connect(function()
 	local k = (input.Text or ""):upper():gsub("%s+", "")
 	if k == KEY_OK then
@@ -577,6 +642,7 @@ btn.MouseButton1Click:Connect(function()
 		msg.Text = "✅ KEY ĐÚNG"
 		keyBox.Visible = false
 		createPanels()
+		notify("OK", "Script đã load xong ✅", 3)
 	else
 		msg.Text = "❌ KEY SAI"
 	end
