@@ -1,5 +1,5 @@
--- StarterPlayerScripts/AutoPanel_V8_AllInOne_SAFE.client.lua
--- Không noclip. Có TELE SAFE + nút THOÁT KẸT (UNSTUCK).
+-- StarterPlayerScripts/AutoPanel_V9_AllInOne_SAFE.client.lua
+-- Tele: về spawn -> lên 10 -> xuống 10 (lên trước, xuống sau)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -14,12 +14,9 @@ local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
 local walkSpeed, flySpeed = 16, 60
 
--- Tele effect
-local DOWN_STUDS = 10
 local UP_STUDS   = 10
+local DOWN_STUDS = 10
 local STEP_DELAY = 0.08
-
--- Unstuck power
 local UNSTUCK_UP_STUDS = 25
 
 -- ===== HELPERS =====
@@ -43,7 +40,6 @@ local function findSpawnCFrame()
 	return CFrame.new(0, 50, 0)
 end
 
--- Anti-kẹt: thử đặt ở nhiều độ cao quanh target
 local function safeSetCFrame(hrp, targetCFrame)
 	if not hrp or not hrp.Parent then return end
 	local rotOnly = targetCFrame - targetCFrame.Position
@@ -61,24 +57,19 @@ local function safeSetCFrame(hrp, targetCFrame)
 end
 
 -- ===== CLEAN OLD GUI =====
-local old = playerGui:FindFirstChild("AutoPanel_V8")
+local old = playerGui:FindFirstChild("AutoPanel_V9")
 if old then old:Destroy() end
 
 -- ===== GUI =====
-local gui = new("ScreenGui", {Name="AutoPanel_V8", ResetOnSpawn=false}, playerGui)
+local gui = new("ScreenGui", {Name="AutoPanel_V9", ResetOnSpawn=false}, playerGui)
 
 local panel = new("Frame", {
-	Name="Panel",
 	Size=UDim2.new(0, 370, 0, 560),
 	Position=UDim2.new(0, 20, 0, 20),
 	BackgroundTransparency=0.15
 }, gui)
 
-local topBar = new("Frame", {
-	Size=UDim2.new(1, 0, 0, 36),
-	BackgroundTransparency=0.25
-}, panel)
-
+local topBar = new("Frame", {Size=UDim2.new(1,0,0,36), BackgroundTransparency=0.25}, panel)
 local title = new("TextLabel", {
 	Size=UDim2.new(1, -110, 1, 0),
 	Position=UDim2.new(0, 10, 0, 0),
@@ -89,30 +80,30 @@ local title = new("TextLabel", {
 }, topBar)
 
 local btnMin = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 26),
-	Position=UDim2.new(1, -100, 0.5, -13),
+	Size=UDim2.new(0,45,0,26),
+	Position=UDim2.new(1,-100,0.5,-13),
 	TextScaled=true,
 	Text="_"
 }, topBar)
 
 local btnClose = new("TextButton", {
-	Size=UDim2.new(0, 45, 0, 26),
-	Position=UDim2.new(1, -50, 0.5, -13),
+	Size=UDim2.new(0,45,0,26),
+	Position=UDim2.new(1,-50,0.5,-13),
 	TextScaled=true,
 	Text="X"
 }, topBar)
 
 local content = new("Frame", {
-	Size=UDim2.new(1, 0, 1, -36),
-	Position=UDim2.new(0, 0, 0, 36),
+	Size=UDim2.new(1,0,1,-36),
+	Position=UDim2.new(0,0,0,36),
 	BackgroundTransparency=1
 }, panel)
 
 local y = 10
 local function addButton(text, height)
 	local b = new("TextButton", {
-		Size=UDim2.new(1, -20, 0, height),
-		Position=UDim2.new(0, 10, 0, y),
+		Size=UDim2.new(1,-20,0,height),
+		Position=UDim2.new(0,10,0,y),
 		TextScaled=true,
 		Text=text
 	}, content)
@@ -122,22 +113,22 @@ end
 
 local function addRowLabel(labelText)
 	local lbl = new("TextLabel", {
-		Size=UDim2.new(0.55, -15, 0, 34),
-		Position=UDim2.new(0, 10, 0, y),
+		Size=UDim2.new(0.55,-15,0,34),
+		Position=UDim2.new(0,10,0,y),
 		BackgroundTransparency=1,
 		TextScaled=true,
 		TextXAlignment=Enum.TextXAlignment.Left,
 		Text=labelText
 	}, content)
 	local minus = new("TextButton", {
-		Size=UDim2.new(0, 45, 0, 34),
-		Position=UDim2.new(0.55, 0, 0, y),
+		Size=UDim2.new(0,45,0,34),
+		Position=UDim2.new(0.55,0,0,y),
 		TextScaled=true,
 		Text="-"
 	}, content)
 	local plus = new("TextButton", {
-		Size=UDim2.new(0, 45, 0, 34),
-		Position=UDim2.new(0.55, 50, 0, y),
+		Size=UDim2.new(0,45,0,34),
+		Position=UDim2.new(0.55,50,0,y),
 		TextScaled=true,
 		Text="+"
 	}, content)
@@ -151,13 +142,13 @@ local walkLabel, walkMinus, walkPlus = addRowLabel(("CHẠY: %d"):format(walkSpe
 local flyLabel,  flyMinus,  flyPlus  = addRowLabel(("BAY: %d"):format(flySpeed))
 local antiFallBtn = addButton("ANTI NGÃ: TẮT", 40)
 local healBtn     = addButton("HỒI MÁU (MAX)", 40)
-local teleBtn     = addButton("VỀ SPAWN (↓10 → spawn → ↑10)", 40)
-local unstuckBtn  = addButton(("THOÁT KẸT (+%d studs)"):format(UNSTUCK_UP_STUDS), 40)
+local teleBtn     = addButton("VỀ SPAWN (↑10 rồi ↓10)", 40)
+local unstuckBtn  = addButton(("THOÁT KẸT (+%d)"):format(UNSTUCK_UP_STUDS), 40)
 local invisBtn    = addButton("TÀNG HÌNH: TẮT", 40)
 
 new("TextLabel", {
-	Size=UDim2.new(1, -20, 0, 80),
-	Position=UDim2.new(0, 10, 0, y),
+	Size=UDim2.new(1,-20,0,80),
+	Position=UDim2.new(0,10,0,y),
 	BackgroundTransparency=1,
 	TextScaled=true,
 	Text="P: ẩn/hiện • _ : thu gọn • X: đóng\nBay: WASD • Space lên • Ctrl xuống"
@@ -209,8 +200,8 @@ local function startFly()
 		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
 		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
 		if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0, 1, 0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
 
 		if move.Magnitude > 0 then move = move.Unit * flySpeed end
 		bv.Velocity = move
@@ -273,24 +264,26 @@ local function setInvis(state)
 	end
 end
 
--- TELE: ↓10 -> spawn -> ↑10 (SAFE)
-local function teleDownSpawnUp()
+-- TELE: spawn -> lên 10 -> xuống 10
+local function teleSpawnUpDown()
 	stopFly()
 	local hrp = getHRP()
-	local rot = hrp.CFrame - hrp.CFrame.Position
-	local here = hrp.Position
 
-	hrp.CFrame = CFrame.new(here + Vector3.new(0, -DOWN_STUDS, 0)) * rot
+	-- 1) về spawn (anti-kẹt)
+	local base = findSpawnCFrame()
+	safeSetCFrame(hrp, base)
 
+	-- 2) lên 10
 	task.delay(STEP_DELAY, function()
 		if not hrp or not hrp.Parent then return end
-		local base = findSpawnCFrame()
-		safeSetCFrame(hrp, base)
+		local base2 = findSpawnCFrame()
+		hrp.CFrame = base2 + Vector3.new(0, UP_STUDS, 0)
 
+		-- 3) xuống 10
 		task.delay(STEP_DELAY, function()
 			if not hrp or not hrp.Parent then return end
-			local base2 = findSpawnCFrame()
-			hrp.CFrame = base2 + Vector3.new(0, UP_STUDS, 0)
+			local rot = hrp.CFrame - hrp.CFrame.Position
+			hrp.CFrame = CFrame.new(hrp.Position + Vector3.new(0, -DOWN_STUDS, 0)) * rot
 		end)
 	end)
 end
@@ -335,7 +328,7 @@ healBtn.MouseButton1Click:Connect(function()
 	hum.Health = hum.MaxHealth
 end)
 
-teleBtn.MouseButton1Click:Connect(teleDownSpawnUp)
+teleBtn.MouseButton1Click:Connect(teleSpawnUpDown)
 unstuckBtn.MouseButton1Click:Connect(unstuck)
 invisBtn.MouseButton1Click:Connect(function() setInvis(not invisible) end)
 
