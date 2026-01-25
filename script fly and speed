@@ -1,7 +1,5 @@
--- StarterPlayerScripts/AutoPanel_V7_AllInOne_SAFE.client.lua
--- GUI tự tạo + _ (minimize) + X (close)
--- Fly + speed (max 200) + Anti ngã + Heal + Tele (↓10 -> về spawn -> ↑10) + Tàng hình (local)
--- Tele có anti-kẹt (không noclip)
+-- StarterPlayerScripts/AutoPanel_V8_AllInOne_SAFE.client.lua
+-- Không noclip. Có TELE SAFE + nút THOÁT KẸT (UNSTUCK).
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -19,7 +17,10 @@ local walkSpeed, flySpeed = 16, 60
 -- Tele effect
 local DOWN_STUDS = 10
 local UP_STUDS   = 10
-local STEP_DELAY = 0.08 -- delay giữa các bước
+local STEP_DELAY = 0.08
+
+-- Unstuck power
+local UNSTUCK_UP_STUDS = 25
 
 -- ===== HELPERS =====
 local function new(inst, props, parent)
@@ -36,28 +37,22 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 
 local function findSpawnCFrame()
 	local sp = Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
-	if sp and sp:IsA("BasePart") then
-		return sp.CFrame + Vector3.new(0, 6, 0)
-	end
+	if sp and sp:IsA("BasePart") then return sp.CFrame + Vector3.new(0, 6, 0) end
 	local byName = Workspace:FindFirstChild("Spawn", true) or Workspace:FindFirstChild("SpawnPoint", true)
-	if byName and byName:IsA("BasePart") then
-		return byName.CFrame + Vector3.new(0, 6, 0)
-	end
+	if byName and byName:IsA("BasePart") then return byName.CFrame + Vector3.new(0, 6, 0) end
 	return CFrame.new(0, 50, 0)
 end
 
--- Anti-kẹt: thử đặt ở nhiều độ cao
+-- Anti-kẹt: thử đặt ở nhiều độ cao quanh target
 local function safeSetCFrame(hrp, targetCFrame)
 	if not hrp or not hrp.Parent then return end
 	local rotOnly = targetCFrame - targetCFrame.Position
 	local basePos = targetCFrame.Position
 
-	-- thử ngay
 	hrp.CFrame = targetCFrame
 	task.wait()
 
-	-- thử nâng dần (để tránh kẹt trong tường/sàn)
-	for i = 1, 15 do
+	for i = 1, 18 do
 		if not hrp or not hrp.Parent then return end
 		local tryPos = basePos + Vector3.new(0, i * 3, 0)
 		hrp.CFrame = CFrame.new(tryPos) * rotOnly
@@ -66,15 +61,15 @@ local function safeSetCFrame(hrp, targetCFrame)
 end
 
 -- ===== CLEAN OLD GUI =====
-local old = playerGui:FindFirstChild("AutoPanel_V7")
+local old = playerGui:FindFirstChild("AutoPanel_V8")
 if old then old:Destroy() end
 
--- ===== CREATE GUI =====
-local gui = new("ScreenGui", {Name="AutoPanel_V7", ResetOnSpawn=false}, playerGui)
+-- ===== GUI =====
+local gui = new("ScreenGui", {Name="AutoPanel_V8", ResetOnSpawn=false}, playerGui)
 
 local panel = new("Frame", {
 	Name="Panel",
-	Size=UDim2.new(0, 370, 0, 520),
+	Size=UDim2.new(0, 370, 0, 560),
 	Position=UDim2.new(0, 20, 0, 20),
 	BackgroundTransparency=0.15
 }, gui)
@@ -150,31 +145,32 @@ local function addRowLabel(labelText)
 	return lbl, minus, plus
 end
 
--- ===== UI =====
+-- UI
 local flyBtn = addButton("BẬT BAY", 44)
 local walkLabel, walkMinus, walkPlus = addRowLabel(("CHẠY: %d"):format(walkSpeed))
 local flyLabel,  flyMinus,  flyPlus  = addRowLabel(("BAY: %d"):format(flySpeed))
 local antiFallBtn = addButton("ANTI NGÃ: TẮT", 40)
 local healBtn     = addButton("HỒI MÁU (MAX)", 40)
 local teleBtn     = addButton("VỀ SPAWN (↓10 → spawn → ↑10)", 40)
+local unstuckBtn  = addButton(("THOÁT KẸT (+%d studs)"):format(UNSTUCK_UP_STUDS), 40)
 local invisBtn    = addButton("TÀNG HÌNH: TẮT", 40)
 
 new("TextLabel", {
-	Size=UDim2.new(1, -20, 0, 90),
+	Size=UDim2.new(1, -20, 0, 80),
 	Position=UDim2.new(0, 10, 0, y),
 	BackgroundTransparency=1,
 	TextScaled=true,
-	Text="Bay: WASD • Space lên • Ctrl xuống\nP: ẩn/hiện • _ : thu gọn • X: đóng"
+	Text="P: ẩn/hiện • _ : thu gọn • X: đóng\nBay: WASD • Space lên • Ctrl xuống"
 }, content)
 
--- ===== WALK SPEED =====
+-- WALK SPEED
 local function applyWalkSpeed()
 	local hum = getHumanoid()
 	hum.WalkSpeed = walkSpeed
 	walkLabel.Text = ("CHẠY: %d"):format(walkSpeed)
 end
 
--- ===== FLY =====
+-- FLY
 local flying = false
 local bv, bg, flyConn
 
@@ -191,7 +187,6 @@ local function startFly()
 	if flying then return end
 	flying = true
 	flyBtn.Text = "TẮT BAY"
-
 	local hrp = getHRP()
 
 	bv = Instance.new("BodyVelocity")
@@ -217,16 +212,13 @@ local function startFly()
 		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
 		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0, 1, 0) end
 
-		if move.Magnitude > 0 then
-			move = move.Unit * flySpeed
-		end
-
+		if move.Magnitude > 0 then move = move.Unit * flySpeed end
 		bv.Velocity = move
 		bg.CFrame = cam.CFrame
 	end)
 end
 
--- ===== ANTI FALL =====
+-- ANTI FALL
 local antiFall = false
 local antiStateConn, antiHeartbeatConn
 
@@ -239,7 +231,6 @@ local function applyAntiFall(state)
 
 	local hum = getHumanoid()
 	hum.PlatformStand = false
-
 	if not antiFall then return end
 
 	antiStateConn = hum.StateChanged:Connect(function(_, newState)
@@ -255,14 +246,14 @@ local function applyAntiFall(state)
 	end)
 
 	antiHeartbeatConn = RunService.Heartbeat:Connect(function()
-		local hum = getHumanoid()
-		if antiFall and hum and hum.Parent and hum.PlatformStand then
-			hum.PlatformStand = false
+		local hum2 = getHumanoid()
+		if antiFall and hum2 and hum2.Parent and hum2.PlatformStand then
+			hum2.PlatformStand = false
 		end
 	end)
 end
 
--- ===== INVIS (local) =====
+-- INVIS (local)
 local invisible = false
 local savedLTM = {}
 
@@ -270,7 +261,6 @@ local function setInvis(state)
 	invisible = state
 	invisBtn.Text = invisible and "TÀNG HÌNH: BẬT" or "TÀNG HÌNH: TẮT"
 	local char = getChar()
-
 	for _, d in ipairs(char:GetDescendants()) do
 		if d:IsA("BasePart") then
 			if state then
@@ -283,23 +273,20 @@ local function setInvis(state)
 	end
 end
 
--- ===== TELE: ↓10 -> spawn -> ↑10 (SAFE) =====
+-- TELE: ↓10 -> spawn -> ↑10 (SAFE)
 local function teleDownSpawnUp()
 	stopFly()
 	local hrp = getHRP()
 	local rot = hrp.CFrame - hrp.CFrame.Position
-
-	-- Bước 1: xuống 10 (theo vị trí hiện tại)
 	local here = hrp.Position
+
 	hrp.CFrame = CFrame.new(here + Vector3.new(0, -DOWN_STUDS, 0)) * rot
 
-	-- Bước 2: về spawn (anti-kẹt)
 	task.delay(STEP_DELAY, function()
 		if not hrp or not hrp.Parent then return end
 		local base = findSpawnCFrame()
 		safeSetCFrame(hrp, base)
 
-		-- Bước 3: lên 10
 		task.delay(STEP_DELAY, function()
 			if not hrp or not hrp.Parent then return end
 			local base2 = findSpawnCFrame()
@@ -308,10 +295,18 @@ local function teleDownSpawnUp()
 	end)
 end
 
--- ===== EVENTS =====
-flyBtn.MouseButton1Click:Connect(function()
-	if flying then stopFly() else startFly() end
-end)
+-- UNSTUCK
+local function unstuck()
+	stopFly()
+	local hrp = getHRP()
+	local rot = hrp.CFrame - hrp.CFrame.Position
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	hrp.CFrame = CFrame.new(hrp.Position + Vector3.new(0, UNSTUCK_UP_STUDS, 0)) * rot
+end
+
+-- EVENTS
+flyBtn.MouseButton1Click:Connect(function() if flying then stopFly() else startFly() end end)
 
 walkMinus.MouseButton1Click:Connect(function()
 	walkSpeed = clamp(walkSpeed - WALK_STEP, WALK_MIN, WALK_MAX)
@@ -333,22 +328,16 @@ flyPlus.MouseButton1Click:Connect(function()
 	flyLabel.Text = ("BAY: %d"):format(flySpeed)
 end)
 
-antiFallBtn.MouseButton1Click:Connect(function()
-	applyAntiFall(not antiFall)
-end)
+antiFallBtn.MouseButton1Click:Connect(function() applyAntiFall(not antiFall) end)
 
 healBtn.MouseButton1Click:Connect(function()
 	local hum = getHumanoid()
 	hum.Health = hum.MaxHealth
 end)
 
-teleBtn.MouseButton1Click:Connect(function()
-	teleDownSpawnUp()
-end)
-
-invisBtn.MouseButton1Click:Connect(function()
-	setInvis(not invisible)
-end)
+teleBtn.MouseButton1Click:Connect(teleDownSpawnUp)
+unstuckBtn.MouseButton1Click:Connect(unstuck)
+invisBtn.MouseButton1Click:Connect(function() setInvis(not invisible) end)
 
 -- Minimize / Close
 local minimized = false
@@ -376,7 +365,7 @@ btnClose.MouseButton1Click:Connect(function()
 	gui:Destroy()
 end)
 
--- Hotkey P ẩn/hiện panel
+-- Hotkey P
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.KeyCode == Enum.KeyCode.P then
@@ -390,10 +379,7 @@ player.CharacterAdded:Connect(function()
 	task.wait(0.1)
 	applyWalkSpeed()
 	if antiFall then applyAntiFall(true) end
-	if invisible then
-		task.wait(0.2)
-		setInvis(true)
-	end
+	if invisible then task.wait(0.2) setInvis(true) end
 end)
 
 applyWalkSpeed()
