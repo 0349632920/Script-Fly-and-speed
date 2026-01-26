@@ -1,5 +1,4 @@
--- StarterPlayerScripts/OneScript_KeyThenPanels_GhostMode_Training_Loaded.client.lua
--- 1 LocalScript duy nhất: Key -> 2 GUI (Finite Jump + Fly/Speed/AntiRagdoll/GhostMode/TrainingMode) + thông báo load xong
+-- StarterPlayerScripts/OneScript_Full_AntiRagdollFix.client.lua
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,8 +11,8 @@ local playerGui = player:WaitForChild("PlayerGui")
 local function notify(title, text, seconds)
 	pcall(function()
 		StarterGui:SetCore("SendNotification", {
-			Title = title or "DONE",
-			Text = text or "Script đã load xong",
+			Title = title or "INFO",
+			Text = text or "",
 			Duration = seconds or 3
 		})
 	end)
@@ -53,9 +52,11 @@ local walkSpeed = 16
 local flySpeed = 60
 local bv, bg, flyConn
 
--- Anti ragdoll
+-- Anti ragdoll (FIX)
 local antiRagdoll = false
-local antiConn
+local antiStateConn
+local antiCharConn
+local antiHeartbeatConn
 
 -- Finite jump
 local finEnabled = false
@@ -63,13 +64,13 @@ local finMaxAir = 2
 local finBoost = 55
 local usedAir = 0
 
--- Ghost mode (auto-lách khi kẹt) + Ghost step (bấm)
+-- Ghost mode
 local ghostEnabled = false
 local ghostConn
 local lastPos
 local stuckTime = 0
 
--- Training Mode (chỉ trong SafeZone)
+-- Training mode (SafeZone)
 local trainingEnabled = false
 local trainingConn
 
@@ -124,29 +125,76 @@ local function startFly()
 end
 
 local function applyWalkSpeed()
-	local hum = getHumanoid()
-	hum.WalkSpeed = walkSpeed
+	getHumanoid().WalkSpeed = walkSpeed
 end
 
--- ===== Anti Ragdoll =====
+-- ===== Anti Ragdoll (FIX mạnh) =====
+local function disconnectAnti()
+	if antiStateConn then antiStateConn:Disconnect() antiStateConn = nil end
+	if antiCharConn then antiCharConn:Disconnect() antiCharConn = nil end
+	if antiHeartbeatConn then antiHeartbeatConn:Disconnect() antiHeartbeatConn = nil end
+end
+
 local function setAntiRagdoll(state)
 	antiRagdoll = state
-	if antiConn then antiConn:Disconnect() antiConn = nil end
+	disconnectAnti()
 	if not antiRagdoll then return end
 
-	local hum = getHumanoid()
-	hum.PlatformStand = false
+	local function bind(char)
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if not hum then return end
 
-	antiConn = hum.StateChanged:Connect(function(_, newState)
-		if not antiRagdoll then return end
-		if newState == Enum.HumanoidStateType.Ragdoll
-			or newState == Enum.HumanoidStateType.FallingDown
-			or newState == Enum.HumanoidStateType.Physics then
-			pcall(function()
-				hum.PlatformStand = false
-				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-				hum:ChangeState(Enum.HumanoidStateType.Running)
-			end)
+		hum.PlatformStand = false
+		hum.Sit = false
+
+		-- 1) bắt state change
+		antiStateConn = hum.StateChanged:Connect(function(_, newState)
+			if not antiRagdoll then return end
+
+			if newState == Enum.HumanoidStateType.Ragdoll
+				or newState == Enum.HumanoidStateType.FallingDown
+				or newState == Enum.HumanoidStateType.Physics
+				or newState == Enum.HumanoidStateType.Seated then
+
+				pcall(function()
+					hum.PlatformStand = false
+					hum.Sit = false
+					hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+					task.defer(function()
+						if antiRagdoll and hum.Parent then
+							hum:ChangeState(Enum.HumanoidStateType.Running)
+						end
+					end)
+				end)
+			end
+		end)
+
+		-- 2) watchdog: ép đứng mỗi Heartbeat
+		antiHeartbeatConn = RunService.Heartbeat:Connect(function()
+			if not antiRagdoll then return end
+			if hum.Parent == nil then return end
+
+			if hum.PlatformStand then hum.PlatformStand = false end
+			if hum.Sit then hum.Sit = false end
+
+			local st = hum:GetState()
+			if st == Enum.HumanoidStateType.Ragdoll
+				or st == Enum.HumanoidStateType.FallingDown
+				or st == Enum.HumanoidStateType.Physics then
+				pcall(function()
+					hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+				end)
+			end
+		end)
+	end
+
+	local char = player.Character
+	if char then bind(char) end
+
+	antiCharConn = player.CharacterAdded:Connect(function(c)
+		if antiRagdoll then
+			task.wait(0.15)
+			bind(c)
 		end
 	end)
 end
@@ -209,7 +257,6 @@ local function setGhostMode(state)
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if not hrp or not hum then return end
 
-		-- không can thiệp khi đang bay
 		if flyEnabled then
 			lastPos = hrp.Position
 			stuckTime = 0
@@ -317,7 +364,7 @@ local btn = mk("TextButton", {
 	Text="XÁC NHẬN"
 }, keyBox)
 
--- ===== Panels refs =====
+-- Panels refs
 local leftPanel, rightPanel
 local finToggle, finMaxLbl, finBoostLbl
 local flyBtn, speedLbl, flySpeedLbl, antiBtn, ghostBtn, ghostStepBtn, trainingBtn
@@ -623,6 +670,7 @@ player.CharacterAdded:Connect(function()
 	stopFly()
 	if ghostConn then ghostConn:Disconnect() ghostConn = nil end
 	if trainingConn then trainingConn:Disconnect() trainingConn = nil end
+	disconnectAnti()
 
 	task.wait(0.1)
 	applyWalkSpeed()
@@ -634,7 +682,6 @@ player.CharacterAdded:Connect(function()
 	hookGroundReset()
 end)
 
--- Key
 btn.MouseButton1Click:Connect(function()
 	local k = (input.Text or ""):upper():gsub("%s+", "")
 	if k == KEY_OK then
@@ -647,4 +694,3 @@ btn.MouseButton1Click:Connect(function()
 		msg.Text = "❌ KEY SAI"
 	end
 end)
- 
