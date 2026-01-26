@@ -1,7 +1,7 @@
--- StarterPlayerScripts/LegitTools_NoKey_FULL.client.lua
+-- StarterPlayerScripts/LegitTools_NoKey_AdminSafe_FULL.client.lua
 -- 1 LocalScript: NO KEY + (-/X) + 2 panels
 -- Fly + Speed<=200 + Inf/Finite Jump + AntiRagdoll + AntiFall + Training(SafeZone)
--- (Không có noclip/anti-kick/god/free gamepass)
+-- + Admin SAFE tools: Teleport Spawn/SafeZone, Heal, Reset, Gravity, Freeze/Unfreeze (local)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,6 +12,11 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- ===== CONFIG =====
+local ADMIN_USERIDS = {
+	-- 👇 THAY userId của bạn vào đây
+	-- Ví dụ: 123456789
+}
+
 local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
 local FIN_MAX_LIMIT = 10
@@ -26,6 +31,13 @@ local function notify(title, text, seconds)
 			Duration = seconds or 3
 		})
 	end)
+end
+
+local function isAdmin()
+	for _, id in ipairs(ADMIN_USERIDS) do
+		if player.UserId == id then return true end
+	end
+	return false
 end
 
 local function clamp(n,a,b) return math.max(a, math.min(b,n)) end
@@ -149,6 +161,10 @@ local antiFall = false
 local antiFallConn
 local trainingEnabled = false
 local trainingConn
+
+-- admin local-only
+local freezeMe = false
+local freezeConn
 
 local leftPanel, rightPanel
 local infToggle, finToggle, finMaxLbl, finBoostLbl
@@ -295,6 +311,23 @@ local function setTrainingMode(state)
 	end)
 end
 
+-- ===== Admin: Freeze local-only =====
+local function setFreeze(state)
+	freezeMe = state
+	if freezeConn then freezeConn:Disconnect() freezeConn=nil end
+	if not freezeMe then return end
+
+	freezeConn = RunService.Heartbeat:Connect(function()
+		local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if not hrp or not hum then return end
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hrp.AssemblyAngularVelocity = Vector3.zero
+		hum.WalkSpeed = 0
+		hum.JumpPower = 0
+	end)
+end
+
 -- ===== finite reset =====
 local function hookGroundReset()
 	local hum = getHumanoid()
@@ -388,12 +421,13 @@ local function createPanels()
 	}, leftPanel)
 
 	-- RIGHT
+	local rightHeight = isAdmin() and 560 or 430
 	rightPanel = mkUI("Frame", {
 		Name="RightPanel",
-		Size=UDim2.new(0, 320, 0, 430),
+		Size=UDim2.new(0, 320, 0, rightHeight),
 		Position=UDim2.new(1, -340, 0, 20),
 	}, gui)
-	addWindowBar(rightPanel, "BAY / SPEED / ANTI")
+	addWindowBar(rightPanel, isAdmin() and "BAY / SPEED / ADMIN" or "BAY / SPEED / ANTI")
 
 	flyBtn = mkUI("TextButton", {
 		Size=UDim2.new(1, -24, 0, 42),
@@ -461,6 +495,121 @@ local function createPanels()
 		TextScaled=true
 	}, rightPanel)
 
+	-- ADMIN SAFE (chỉ admin thấy)
+	if isAdmin() then
+		local adminFrame = mkUI("Frame", {
+			Size = UDim2.new(1, -24, 0, 240),
+			Position = UDim2.new(0, 12, 0, 320),
+		}, rightPanel)
+
+		mkUI("TextLabel", {
+			Size = UDim2.new(1, -12, 0, 24),
+			Position = UDim2.new(0, 6, 0, 6),
+			TextScaled = true,
+			Text = "ADMIN TOOLS (SAFE)"
+		}, adminFrame)
+
+		local tpSpawn = mkUI("TextButton", {
+			Size = UDim2.new(1, -12, 0, 34),
+			Position = UDim2.new(0, 6, 0, 36),
+			TextScaled = true,
+			Text = "TELEPORT: SPAWN"
+		}, adminFrame)
+
+		local tpSafe = mkUI("TextButton", {
+			Size = UDim2.new(1, -12, 0, 34),
+			Position = UDim2.new(0, 6, 0, 74),
+			TextScaled = true,
+			Text = "TELEPORT: SAFEZONE"
+		}, adminFrame)
+
+		local healMe = mkUI("TextButton", {
+			Size = UDim2.new(0.49, -8, 0, 34),
+			Position = UDim2.new(0, 6, 0, 112),
+			TextScaled = true,
+			Text = "HEAL ME"
+		}, adminFrame)
+
+		local resetMe = mkUI("TextButton", {
+			Size = UDim2.new(0.49, -8, 0, 34),
+			Position = UDim2.new(0.51, 2, 0, 112),
+			TextScaled = true,
+			Text = "RESET ME"
+		}, adminFrame)
+
+		local gravityBtn = mkUI("TextButton", {
+			Size = UDim2.new(1, -12, 0, 34),
+			Position = UDim2.new(0, 6, 0, 150),
+			TextScaled = true,
+			Text = "GRAVITY: BÌNH THƯỜNG"
+		}, adminFrame)
+
+		local freezeBtn = mkUI("TextButton", {
+			Size = UDim2.new(1, -12, 0, 34),
+			Position = UDim2.new(0, 6, 0, 188),
+			TextScaled = true,
+			Text = "FREEZE ME: TẮT"
+		}, adminFrame)
+
+		local function tpToPart(part)
+			local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			if not hrp then return end
+			hrp.CFrame = part.CFrame + Vector3.new(0, 5, 0)
+		end
+
+		tpSpawn.MouseButton1Click:Connect(function()
+			local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
+			if not spawn then
+				notify("ADMIN", "Không thấy SpawnLocation", 2)
+				return
+			end
+			tpToPart(spawn)
+		end)
+
+		tpSafe.MouseButton1Click:Connect(function()
+			local safe = workspace:FindFirstChild("SafeZone")
+			if not safe or not safe:IsA("BasePart") then
+				notify("ADMIN", "Không thấy Part tên SafeZone", 2)
+				return
+			end
+			tpToPart(safe)
+		end)
+
+		healMe.MouseButton1Click:Connect(function()
+			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.Health = hum.MaxHealth end
+		end)
+
+		resetMe.MouseButton1Click:Connect(function()
+			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.Health = 0 end
+		end)
+
+		local lowG = false
+		local normalG = workspace.Gravity
+		gravityBtn.MouseButton1Click:Connect(function()
+			lowG = not lowG
+			workspace.Gravity = lowG and 60 or normalG
+			gravityBtn.Text = lowG and "GRAVITY: THẤP" or "GRAVITY: BÌNH THƯỜNG"
+		end)
+
+		freezeBtn.MouseButton1Click:Connect(function()
+			freezeMe = not freezeMe
+			if freezeMe then
+				setFreeze(true)
+				freezeBtn.Text = "FREEZE ME: BẬT"
+			else
+				if freezeConn then freezeConn:Disconnect() freezeConn=nil end
+				local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+				if hum then
+					hum.WalkSpeed = walkSpeed
+					hum.JumpPower = 50
+				end
+				freezeBtn.Text = "FREEZE ME: TẮT"
+			end
+		end)
+	end
+
 	-- actions
 	infToggle.MouseButton1Click:Connect(function() infJump = not infJump; refreshLeftUI() end)
 	finToggle.MouseButton1Click:Connect(function() finEnabled = not finEnabled; refreshLeftUI() end)
@@ -494,9 +643,9 @@ local function createPanels()
 	refreshRightUI()
 end
 
--- ===== START (NO KEY) =====
+-- ===== START =====
 createPanels()
-notify("OK", "GUI đã mở (không cần key) ✅", 3)
+notify("OK", isAdmin() and "Admin tools đã bật ✅" or "GUI đã mở ✅", 3)
 
 -- ===== HOTKEY =====
 UserInputService.InputBegan:Connect(function(inp, gp)
@@ -554,12 +703,14 @@ player.CharacterAdded:Connect(function()
 	if antiRagConn then antiRagConn:Disconnect() antiRagConn=nil end
 	if antiFallConn then antiFallConn:Disconnect() antiFallConn=nil end
 	if trainingConn then trainingConn:Disconnect() trainingConn=nil end
+	if freezeConn then freezeConn:Disconnect() freezeConn=nil end
 
 	task.wait(0.1)
 	applyWalkSpeed()
 	if antiRagdoll then setAntiRagdoll(true) end
 	if antiFall then setAntiFall(true) end
 	if trainingEnabled then setTrainingMode(true) end
+	if freezeMe then setFreeze(true) end
 
 	usedAir = 0
 	hookGroundReset()
