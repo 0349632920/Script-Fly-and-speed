@@ -1,19 +1,13 @@
+-- StarterPlayerScripts/ClientAutoGUI_ALWAYS_VISIBLE.client.lua
+-- GUI LUÔN HIỆN (B) để test: Kick/Ban UI + notification
+-- Cần có ServerScript (AdminAuto.server.lua) trong ServerScriptService để kick/ban hoạt động.
+
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-
--- ✅ ĐIỀN USERID ADMIN (giống server)
-local ADMIN_USERIDS_LOCAL = {7917510207}
-
-local function isAdminLocal()
-	for _, id in ipairs(ADMIN_USERIDS_LOCAL) do
-		if player.UserId == id then return true end
-	end
-	return false
-end
 
 local function notify(title, text, seconds)
 	pcall(function()
@@ -32,17 +26,18 @@ local function mk(inst, props, parent)
 	return o
 end
 
--- Auto create GUI
+-- Xóa GUI cũ nếu có
 local old = playerGui:FindFirstChild("AdminAutoGUI")
 if old then old:Destroy() end
 
+-- Tạo GUI
 local gui = mk("ScreenGui", {Name="AdminAutoGUI", ResetOnSpawn=false}, playerGui)
 
 local panel = mk("Frame", {
-	Size = UDim2.new(0, 320, 0, 220),
+	Size = UDim2.new(0, 320, 0, 230),
 	Position = UDim2.new(1, -340, 0, 20),
 	BackgroundTransparency = 0.15,
-	Visible = isAdminLocal()
+	Visible = true -- ✅ B: LUÔN HIỆN
 }, gui)
 
 mk("TextLabel", {
@@ -50,9 +45,10 @@ mk("TextLabel", {
 	Position = UDim2.new(0, 10, 0, 10),
 	BackgroundTransparency = 1,
 	TextScaled = true,
-	Text = "ADMIN MOD (KICK/BAN)"
+	Text = "ADMIN MOD (KICK / BAN)"
 }, panel)
 
+-- Remote (server tự tạo)
 local adminRem = ReplicatedStorage:WaitForChild("AdminMod")
 
 local targetBtn = mk("TextButton", {
@@ -126,6 +122,7 @@ local function callAdmin(action)
 	pcall(function()
 		ok, msg = adminRem:InvokeServer(action, selectedUserId, reason)
 	end)
+
 	notify(ok and "OK" or "FAIL", tostring(msg), 3)
 end
 
@@ -133,4 +130,5 @@ kickBtn.MouseButton1Click:Connect(function() callAdmin("kick") end)
 banBtn.MouseButton1Click:Connect(function() callAdmin("ban") end)
 unbanBtn.MouseButton1Click:Connect(function() callAdmin("unban") end)
 
-notify("OK", "Admin GUI loaded ✅", 3)
+notify("OK", "GUI loaded ✅ (B: luôn hiện)", 3)
+print("GUI loaded, userId =", player.UserId)
