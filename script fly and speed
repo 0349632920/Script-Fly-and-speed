@@ -12,7 +12,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 -- ===== CONFIG =====
 local KEY_OK = "HUNGSCRIPT-3456"
 local ADMIN_USERIDS = { -- optional
-	-- 123456789,
+	-- 7917510207,
 }
 
 local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
