@@ -1,4 +1,4 @@
--- StarterPlayerScripts/OneScript_Full_AntiRagdollFix.client.lua
+-- StarterPlayerScripts/OneScript_Full_FixJump_Ragdoll.client.lua
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -52,17 +52,17 @@ local walkSpeed = 16
 local flySpeed = 60
 local bv, bg, flyConn
 
--- Anti ragdoll (FIX)
+-- Anti ragdoll
 local antiRagdoll = false
-local antiStateConn
-local antiCharConn
-local antiHeartbeatConn
+local antiHBConn
 
--- Finite jump
+-- Jump modes
+local infJump = false
 local finEnabled = false
 local finMaxAir = 2
 local finBoost = 55
 local usedAir = 0
+local lastSpaceAt = 0
 
 -- Ghost mode
 local ghostEnabled = false
@@ -70,7 +70,7 @@ local ghostConn
 local lastPos
 local stuckTime = 0
 
--- Training mode (SafeZone)
+-- Training (SafeZone)
 local trainingEnabled = false
 local trainingConn
 
@@ -79,6 +79,10 @@ local function isGrounded(hum)
 	return st == Enum.HumanoidStateType.Running
 		or st == Enum.HumanoidStateType.RunningNoPhysics
 		or st == Enum.HumanoidStateType.Landed
+end
+
+local function applyWalkSpeed()
+	getHumanoid().WalkSpeed = walkSpeed
 end
 
 -- ===== Fly =====
@@ -124,94 +128,7 @@ local function startFly()
 	end)
 end
 
-local function applyWalkSpeed()
-	getHumanoid().WalkSpeed = walkSpeed
-end
-
--- ===== Anti Ragdoll (FIX mạnh) =====
-local function disconnectAnti()
-	if antiStateConn then antiStateConn:Disconnect() antiStateConn = nil end
-	if antiCharConn then antiCharConn:Disconnect() antiCharConn = nil end
-	if antiHeartbeatConn then antiHeartbeatConn:Disconnect() antiHeartbeatConn = nil end
-end
-
-local function setAntiRagdoll(state)
-	antiRagdoll = state
-	disconnectAnti()
-	if not antiRagdoll then return end
-
-	local function bind(char)
-		local hum = char:FindFirstChildOfClass("Humanoid")
-		if not hum then return end
-
-		hum.PlatformStand = false
-		hum.Sit = false
-
-		-- 1) bắt state change
-		antiStateConn = hum.StateChanged:Connect(function(_, newState)
-			if not antiRagdoll then return end
-
-			if newState == Enum.HumanoidStateType.Ragdoll
-				or newState == Enum.HumanoidStateType.FallingDown
-				or newState == Enum.HumanoidStateType.Physics
-				or newState == Enum.HumanoidStateType.Seated then
-
-				pcall(function()
-					hum.PlatformStand = false
-					hum.Sit = false
-					hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-					task.defer(function()
-						if antiRagdoll and hum.Parent then
-							hum:ChangeState(Enum.HumanoidStateType.Running)
-						end
-					end)
-				end)
-			end
-		end)
-
-		-- 2) watchdog: ép đứng mỗi Heartbeat
-		antiHeartbeatConn = RunService.Heartbeat:Connect(function()
-			if not antiRagdoll then return end
-			if hum.Parent == nil then return end
-
-			if hum.PlatformStand then hum.PlatformStand = false end
-			if hum.Sit then hum.Sit = false end
-
-			local st = hum:GetState()
-			if st == Enum.HumanoidStateType.Ragdoll
-				or st == Enum.HumanoidStateType.FallingDown
-				or st == Enum.HumanoidStateType.Physics then
-				pcall(function()
-					hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-				end)
-			end
-		end)
-	end
-
-	local char = player.Character
-	if char then bind(char) end
-
-	antiCharConn = player.CharacterAdded:Connect(function(c)
-		if antiRagdoll then
-			task.wait(0.15)
-			bind(c)
-		end
-	end)
-end
-
--- ===== Finite Jump =====
-local function hookGroundReset()
-	local hum = getHumanoid()
-	hum.StateChanged:Connect(function(_, newState)
-		if newState == Enum.HumanoidStateType.Landed
-			or newState == Enum.HumanoidStateType.Running
-			or newState == Enum.HumanoidStateType.RunningNoPhysics then
-			usedAir = 0
-		end
-	end)
-end
-
--- ===== Ghost Step + Ghost Mode =====
+-- ===== Ghost =====
 local function GhostStep(studs)
 	studs = studs or 6
 	local char = player.Character
@@ -234,9 +151,7 @@ local function GhostStep(studs)
 	params.FilterDescendantsInstances = {char}
 
 	local hit = workspace:Raycast(start, (target - start), params)
-	if hit then
-		target = hit.Position - flat * 1
-	end
+	if hit then target = hit.Position - flat * 1 end
 
 	local rot = hrp.CFrame - hrp.Position
 	hrp.AssemblyLinearVelocity = Vector3.zero
@@ -246,8 +161,7 @@ end
 local function setGhostMode(state)
 	ghostEnabled = state
 	if ghostConn then ghostConn:Disconnect() ghostConn = nil end
-	lastPos = nil
-	stuckTime = 0
+	lastPos, stuckTime = nil, 0
 	if not ghostEnabled then return end
 
 	ghostConn = RunService.Heartbeat:Connect(function(dt)
@@ -275,10 +189,7 @@ local function setGhostMode(state)
 			return
 		end
 
-		if not lastPos then
-			lastPos = hrp.Position
-			return
-		end
+		if not lastPos then lastPos = hrp.Position return end
 
 		local moved = (hrp.Position - lastPos).Magnitude
 		lastPos = hrp.Position
@@ -295,13 +206,12 @@ local function setGhostMode(state)
 	end)
 end
 
--- ===== Training Mode (SafeZone) =====
+-- ===== Training =====
 local function inSafeZone()
 	local zone = workspace:FindFirstChild("SafeZone")
 	if not zone or not zone:IsA("BasePart") then return false end
 	local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return false end
-
 	local lp = zone.CFrame:PointToObjectSpace(hrp.Position)
 	return math.abs(lp.X) <= zone.Size.X/2
 		and math.abs(lp.Y) <= zone.Size.Y/2
@@ -316,15 +226,61 @@ local function setTrainingMode(state)
 	trainingConn = RunService.Heartbeat:Connect(function()
 		local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 		if not hum then return end
-		if inSafeZone() then
-			if hum.Health < hum.MaxHealth then
-				hum.Health = hum.MaxHealth
+		if inSafeZone() and hum.Health < hum.MaxHealth then
+			hum.Health = hum.MaxHealth
+		end
+	end)
+end
+
+-- ===== Anti Ragdoll (Motor6D fix) =====
+local function setAntiRagdoll(state)
+	antiRagdoll = state
+	if antiHBConn then antiHBConn:Disconnect() antiHBConn = nil end
+	if not antiRagdoll then return end
+
+	antiHBConn = RunService.Heartbeat:Connect(function()
+		if not antiRagdoll then return end
+		local char = player.Character
+		if not char then return end
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if not hum then return end
+
+		-- ép đứng / bỏ sit
+		if hum.PlatformStand then hum.PlatformStand = false end
+		if hum.Sit then hum.Sit = false end
+
+		-- nếu state ragdoll/physics -> gettingup
+		local st = hum:GetState()
+		if st == Enum.HumanoidStateType.Ragdoll
+			or st == Enum.HumanoidStateType.FallingDown
+			or st == Enum.HumanoidStateType.Physics then
+			pcall(function()
+				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end)
+		end
+
+		-- ✅ quan trọng: bật lại Motor6D nếu game disable để ragdoll
+		for _, d in ipairs(char:GetDescendants()) do
+			if d:IsA("Motor6D") and d.Enabled == false then
+				d.Enabled = true
 			end
 		end
 	end)
 end
 
--- ===== UI: KEY =====
+-- ===== Jump logic =====
+local function hookGroundReset()
+	local hum = getHumanoid()
+	hum.StateChanged:Connect(function(_, newState)
+		if newState == Enum.HumanoidStateType.Landed
+			or newState == Enum.HumanoidStateType.Running
+			or newState == Enum.HumanoidStateType.RunningNoPhysics then
+			usedAir = 0
+		end
+	end)
+end
+
+-- ===== UI =====
 local keyBox = mk("Frame", {
 	Name="KeyBox",
 	Size=UDim2.new(0, 360, 0, 190),
@@ -364,13 +320,13 @@ local btn = mk("TextButton", {
 	Text="XÁC NHẬN"
 }, keyBox)
 
--- Panels refs
 local leftPanel, rightPanel
-local finToggle, finMaxLbl, finBoostLbl
+local finToggle, infToggle, finMaxLbl, finBoostLbl
 local flyBtn, speedLbl, flySpeedLbl, antiBtn, ghostBtn, ghostStepBtn, trainingBtn
 
 local function refreshFiniteUI()
 	if finToggle then finToggle.Text = finEnabled and "FINITE JUMP: BẬT" or "FINITE JUMP: TẮT" end
+	if infToggle then infToggle.Text = infJump and "INF JUMP: BẬT" or "INF JUMP: TẮT" end
 	if finMaxLbl then finMaxLbl.Text = ("SỐ NHẢY: %d"):format(finMaxAir) end
 	if finBoostLbl then finBoostLbl.Text = ("LỰC NHẢY: %d"):format(finBoost) end
 end
@@ -385,10 +341,9 @@ local function refreshRightUI()
 end
 
 local function createPanels()
-	-- LEFT
 	leftPanel = mk("Frame", {
 		Name="LeftPanel",
-		Size=UDim2.new(0, 320, 0, 220),
+		Size=UDim2.new(0, 320, 0, 270),
 		Position=UDim2.new(0, 20, 0, 20),
 		BackgroundTransparency=0.15
 	}, gui)
@@ -399,18 +354,24 @@ local function createPanels()
 		BackgroundTransparency=1,
 		TextScaled=true,
 		TextXAlignment=Enum.TextXAlignment.Left,
-		Text="FINITE JUMP"
+		Text="JUMP"
+	}, leftPanel)
+
+	infToggle = mk("TextButton", {
+		Size=UDim2.new(1, -20, 0, 38),
+		Position=UDim2.new(0, 10, 0, 40),
+		TextScaled=true
 	}, leftPanel)
 
 	finToggle = mk("TextButton", {
-		Size=UDim2.new(1, -20, 0, 40),
-		Position=UDim2.new(0, 10, 0, 40),
+		Size=UDim2.new(1, -20, 0, 38),
+		Position=UDim2.new(0, 10, 0, 82),
 		TextScaled=true
 	}, leftPanel)
 
 	finMaxLbl = mk("TextLabel", {
 		Size=UDim2.new(0.55, -15, 0, 34),
-		Position=UDim2.new(0, 10, 0, 90),
+		Position=UDim2.new(0, 10, 0, 128),
 		BackgroundTransparency=1,
 		TextScaled=true,
 		TextXAlignment=Enum.TextXAlignment.Left
@@ -418,21 +379,21 @@ local function createPanels()
 
 	local finMaxMinus = mk("TextButton", {
 		Size=UDim2.new(0, 45, 0, 34),
-		Position=UDim2.new(0.55, 0, 0, 90),
+		Position=UDim2.new(0.55, 0, 0, 128),
 		TextScaled=true,
 		Text="-"
 	}, leftPanel)
 
 	local finMaxPlus = mk("TextButton", {
 		Size=UDim2.new(0, 45, 0, 34),
-		Position=UDim2.new(0.55, 50, 0, 90),
+		Position=UDim2.new(0.55, 50, 0, 128),
 		TextScaled=true,
 		Text="+"
 	}, leftPanel)
 
 	finBoostLbl = mk("TextLabel", {
 		Size=UDim2.new(0.55, -15, 0, 34),
-		Position=UDim2.new(0, 10, 0, 132),
+		Position=UDim2.new(0, 10, 0, 170),
 		BackgroundTransparency=1,
 		TextScaled=true,
 		TextXAlignment=Enum.TextXAlignment.Left
@@ -440,27 +401,26 @@ local function createPanels()
 
 	local finBoostMinus = mk("TextButton", {
 		Size=UDim2.new(0, 45, 0, 34),
-		Position=UDim2.new(0.55, 0, 0, 132),
+		Position=UDim2.new(0.55, 0, 0, 170),
 		TextScaled=true,
 		Text="-"
 	}, leftPanel)
 
 	local finBoostPlus = mk("TextButton", {
 		Size=UDim2.new(0, 45, 0, 34),
-		Position=UDim2.new(0.55, 50, 0, 132),
+		Position=UDim2.new(0.55, 50, 0, 170),
 		TextScaled=true,
 		Text="+"
 	}, leftPanel)
 
 	mk("TextLabel", {
 		Size=UDim2.new(1, -20, 0, 30),
-		Position=UDim2.new(0, 10, 0, 174),
+		Position=UDim2.new(0, 10, 0, 220),
 		BackgroundTransparency=1,
 		TextScaled=true,
 		Text="P: ẩn/hiện 2 bảng"
 	}, leftPanel)
 
-	-- RIGHT
 	rightPanel = mk("Frame", {
 		Name="RightPanel",
 		Size=UDim2.new(0, 320, 0, 380),
@@ -474,7 +434,7 @@ local function createPanels()
 		BackgroundTransparency=1,
 		TextScaled=true,
 		TextXAlignment=Enum.TextXAlignment.Left,
-		Text="BAY / SPEED / ANTI RAGDOLL"
+		Text="BAY / SPEED / ANTI"
 	}, rightPanel)
 
 	flyBtn = mk("TextButton", {
@@ -561,6 +521,11 @@ local function createPanels()
 	}, rightPanel)
 
 	-- Events
+	infToggle.MouseButton1Click:Connect(function()
+		infJump = not infJump
+		refreshFiniteUI()
+	end)
+
 	finToggle.MouseButton1Click:Connect(function()
 		finEnabled = not finEnabled
 		refreshFiniteUI()
@@ -636,31 +601,58 @@ local function createPanels()
 	refreshRightUI()
 end
 
--- Input
+-- INPUT: chặn double jump mặc định khi chưa bật inf/finite
 UserInputService.InputBegan:Connect(function(inputObj, gp)
 	if gp then return end
+	if not access then return end
 
-	if inputObj.KeyCode == Enum.KeyCode.P and access and leftPanel and rightPanel then
+	-- Toggle panels
+	if inputObj.KeyCode == Enum.KeyCode.P and leftPanel and rightPanel then
 		local v = not leftPanel.Visible
 		leftPanel.Visible = v
 		rightPanel.Visible = v
 		return
 	end
 
-	if inputObj.KeyCode == Enum.KeyCode.Space and access and finEnabled then
+	-- Jump handling
+	if inputObj.KeyCode == Enum.KeyCode.Space then
 		local hum = getHumanoid()
 		local hrp = getHRP()
 
-		if isGrounded(hum) then
-			usedAir = 0
+		-- Nếu không bật inf/finite: chặn “space lần 2” (double jump của game)
+		if (not infJump) and (not finEnabled) then
+			if not isGrounded(hum) then
+				local now = tick()
+				-- nếu bấm space khi đang trên không -> nuốt bớt lần nhảy
+				-- (không ảnh hưởng nhảy lần đầu từ mặt đất)
+				if now - lastSpaceAt < 0.5 then
+					return
+				end
+				lastSpaceAt = now
+			end
 			return
 		end
 
-		if usedAir >= finMaxAir then return end
-		usedAir += 1
+		-- INF JUMP: mỗi lần bấm Space trên không -> nhảy lên
+		if infJump then
+			if not isGrounded(hum) then
+				local v = hrp.AssemblyLinearVelocity
+				hrp.AssemblyLinearVelocity = Vector3.new(v.X, math.max(v.Y, finBoost), v.Z)
+			end
+			return
+		end
 
-		local v = hrp.AssemblyLinearVelocity
-		hrp.AssemblyLinearVelocity = Vector3.new(v.X, math.max(v.Y, finBoost), v.Z)
+		-- FINITE JUMP
+		if finEnabled then
+			if isGrounded(hum) then
+				usedAir = 0
+				return
+			end
+			if usedAir >= finMaxAir then return end
+			usedAir += 1
+			local v = hrp.AssemblyLinearVelocity
+			hrp.AssemblyLinearVelocity = Vector3.new(v.X, math.max(v.Y, finBoost), v.Z)
+		end
 	end
 end)
 
@@ -670,7 +662,7 @@ player.CharacterAdded:Connect(function()
 	stopFly()
 	if ghostConn then ghostConn:Disconnect() ghostConn = nil end
 	if trainingConn then trainingConn:Disconnect() trainingConn = nil end
-	disconnectAnti()
+	if antiHBConn then antiHBConn:Disconnect() antiHBConn = nil end
 
 	task.wait(0.1)
 	applyWalkSpeed()
@@ -682,6 +674,7 @@ player.CharacterAdded:Connect(function()
 	hookGroundReset()
 end)
 
+-- KEY
 btn.MouseButton1Click:Connect(function()
 	local k = (input.Text or ""):upper():gsub("%s+", "")
 	if k == KEY_OK then
