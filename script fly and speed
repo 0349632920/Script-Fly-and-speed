@@ -1,5 +1,7 @@
--- StarterPlayerScripts/OneScript_LegitTools_FINAL_KeyConfirmVisible.client.lua
--- Hợp lệ: Key + Confirm + (-/X) + 2 panel + Fly + Speed<=200 + Inf/Finite Jump + AntiFall + AntiRagdoll + Training
+-- StarterPlayerScripts/LegitTools_KeyConfirmAlwaysVisible.client.lua
+-- 1 LocalScript: Key GUI (Confirm luôn hiện) + (-/X) + 2 panels
+-- Fly + Speed<=200 + Inf/Finite Jump + AntiRagdoll + AntiFall + Training(SafeZone)
+-- (Không có noclip/anti-kick/god/free gamepass)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -11,9 +13,6 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- ===== CONFIG =====
 local KEY_OK = "HUNGSCRIPT-3456"
-local ADMIN_USERIDS = { -- optional
-	-- 7917510207,
-}
 
 local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
@@ -29,13 +28,6 @@ local function notify(title, text, seconds)
 			Duration = seconds or 3
 		})
 	end)
-end
-
-local function isAdmin()
-	for _, id in ipairs(ADMIN_USERIDS) do
-		if player.UserId == id then return true end
-	end
-	return false
 end
 
 local function clamp(n,a,b) return math.max(a, math.min(b,n)) end
@@ -87,7 +79,7 @@ local function mkUI(className, props, parent)
 	return o
 end
 
--- ===== WINDOW BAR (-/X) + CONTENT (FIX HEIGHT) =====
+-- ===== WINDOW BAR (-/X) =====
 local function addWindowBar(frame, titleText)
 	local bar = mkUI("Frame", {
 		Size = UDim2.new(1, -12, 0, 30),
@@ -121,7 +113,7 @@ local function addWindowBar(frame, titleText)
 	minBtn.MouseButton1Click:Connect(function()
 		minimized = not minimized
 		for _, ch in ipairs(frame:GetChildren()) do
-			if ch ~= bar and ch.Name ~= "UIStroke" and ch.Name ~= "UICorner" then
+			if ch ~= bar and ch.Name ~= "UICorner" and ch.Name ~= "UIStroke" then
 				ch.Visible = not minimized
 			end
 		end
@@ -136,9 +128,9 @@ local function addWindowBar(frame, titleText)
 end
 
 -- ===== CLEAN OLD =====
-local old = playerGui:FindFirstChild("OneScriptGUI")
+local old = playerGui:FindFirstChild("LegitToolsGUI")
 if old then old:Destroy() end
-local gui = mk("ScreenGui", {Name="OneScriptGUI", ResetOnSpawn=false}, playerGui)
+local gui = mk("ScreenGui", {Name="LegitToolsGUI", ResetOnSpawn=false}, playerGui)
 
 -- ===== STATE =====
 local access = false
@@ -161,6 +153,10 @@ local antiFall = false
 local antiFallConn
 local trainingEnabled = false
 local trainingConn
+
+local leftPanel, rightPanel
+local infToggle, finToggle, finMaxLbl, finBoostLbl
+local flyBtn, speedLbl, flySpeedLbl, antiRagBtn, antiFallBtn, trainingBtn
 
 local function isGrounded(hum)
 	local st = hum:GetState()
@@ -216,7 +212,7 @@ local function startFly()
 	end)
 end
 
--- ===== AntiRagdoll =====
+-- ===== ANTI RAGDOLL =====
 local function setAntiRagdoll(state)
 	antiRagdoll = state
 	if antiRagConn then antiRagConn:Disconnect() antiRagConn=nil end
@@ -246,7 +242,7 @@ local function setAntiRagdoll(state)
 	end)
 end
 
--- ===== AntiFall =====
+-- ===== ANTI FALL =====
 local function setAntiFall(state)
 	antiFall = state
 	if antiFallConn then antiFallConn:Disconnect() antiFallConn=nil end
@@ -277,7 +273,7 @@ local function setAntiFall(state)
 	end)
 end
 
--- ===== Training =====
+-- ===== TRAINING (SafeZone part) =====
 local function inSafeZone()
 	local zone = workspace:FindFirstChild("SafeZone")
 	if not zone or not zone:IsA("BasePart") then return false end
@@ -303,7 +299,7 @@ local function setTrainingMode(state)
 	end)
 end
 
--- ===== Finite reset =====
+-- ===== finite reset =====
 local function hookGroundReset()
 	local hum = getHumanoid()
 	hum.StateChanged:Connect(function(_, newState)
@@ -315,49 +311,6 @@ local function hookGroundReset()
 	end)
 end
 hookGroundReset()
-
--- ===== KEY GUI (FIX: confirm luôn hiện) =====
-local keyBox = mkUI("Frame", {
-	Name="KeyBox",
-	Size=UDim2.new(0, 420, 0, 280),
-	Position=UDim2.new(0.5, -210, 0.5, -140),
-}, gui)
-
-addWindowBar(keyBox, "NHẬP KEY")
-
-local input = mkUI("TextBox", {
-	Size=UDim2.new(1, -24, 0, 44),
-	Position=UDim2.new(0, 12, 0, 52),
-	TextScaled=true,
-	PlaceholderText="Nhập key rồi bấm ENTER hoặc XÁC NHẬN",
-	Text=""
-}, keyBox)
-
-local confirmBtn = mkUI("TextButton", {
-	Size=UDim2.new(1, -24, 0, 44),
-	Position=UDim2.new(0, 12, 0, 104),
-	TextScaled=true,
-	Text="XÁC NHẬN"
-}, keyBox)
-
-local msg = mkUI("TextLabel", {
-	Size=UDim2.new(1, -24, 0, 24),
-	Position=UDim2.new(0, 12, 0, 156),
-	TextScaled=true,
-	Text=""
-}, keyBox)
-
-mkUI("TextLabel", {
-	Size=UDim2.new(1, -24, 0, 70),
-	Position=UDim2.new(0, 12, 0, 182),
-	TextScaled=true,
-	Text="P: ẩn/hiện 2 panel sau khi mở\nO: mở lại panel nếu lỡ bấm X đóng"
-}, keyBox)
-
--- ===== PANELS =====
-local leftPanel, rightPanel
-local infToggle, finToggle, finMaxLbl, finBoostLbl
-local flyBtn, speedLbl, flySpeedLbl, antiRagBtn, antiFallBtn, trainingBtn
 
 local function refreshLeftUI()
 	if infToggle then infToggle.Text = infJump and "INF JUMP: BẬT" or "INF JUMP: TẮT" end
@@ -376,7 +329,7 @@ local function refreshRightUI()
 end
 
 local function createPanels()
-	-- LEFT
+	-- LEFT PANEL
 	leftPanel = mkUI("Frame", {
 		Name="LeftPanel",
 		Size=UDim2.new(0, 320, 0, 270),
@@ -438,7 +391,7 @@ local function createPanels()
 		Text="+"
 	}, leftPanel)
 
-	-- RIGHT
+	-- RIGHT PANEL
 	rightPanel = mkUI("Frame", {
 		Name="RightPanel",
 		Size=UDim2.new(0, 320, 0, 430),
@@ -512,7 +465,7 @@ local function createPanels()
 		TextScaled=true
 	}, rightPanel)
 
-	-- Actions
+	-- actions
 	infToggle.MouseButton1Click:Connect(function() infJump = not infJump; refreshLeftUI() end)
 	finToggle.MouseButton1Click:Connect(function() finEnabled = not finEnabled; refreshLeftUI() end)
 
@@ -545,6 +498,36 @@ local function createPanels()
 	refreshRightUI()
 end
 
+-- ===== KEY GUI (Confirm luôn hiện) =====
+local keyBox = mkUI("Frame", {
+	Name="KeyBox",
+	Size=UDim2.new(0, 520, 0, 170),
+	Position=UDim2.new(0.5, -260, 0.5, -85),
+}, gui)
+addWindowBar(keyBox, "NHẬP KEY")
+
+local input = mkUI("TextBox", {
+	Size=UDim2.new(1, -24-120-8, 0, 44),
+	Position=UDim2.new(0, 12, 0, 60),
+	TextScaled=true,
+	PlaceholderText="Nhập key…",
+	Text=""
+}, keyBox)
+
+local confirmBtn = mkUI("TextButton", {
+	Size=UDim2.new(0, 120, 0, 44),
+	Position=UDim2.new(1, -12-120, 0, 60),
+	TextScaled=true,
+	Text="XÁC NHẬN"
+}, keyBox)
+
+local msg = mkUI("TextLabel", {
+	Size=UDim2.new(1, -24, 0, 22),
+	Position=UDim2.new(0, 12, 0, 112),
+	TextScaled=true,
+	Text=""
+}, keyBox)
+
 -- ===== KEY CHECK =====
 local function checkKey()
 	local k = (input.Text or ""):upper():gsub("%s+","")
@@ -569,6 +552,7 @@ end)
 UserInputService.InputBegan:Connect(function(inp, gp)
 	if gp then return end
 
+	-- O: mở lại nếu lỡ bấm X đóng panel
 	if inp.KeyCode == Enum.KeyCode.O then
 		if keyBox and not access then keyBox.Visible = true end
 		if leftPanel and access then leftPanel.Visible = true end
@@ -577,6 +561,7 @@ UserInputService.InputBegan:Connect(function(inp, gp)
 
 	if not access then return end
 
+	-- P: ẩn/hiện 2 panel
 	if inp.KeyCode == Enum.KeyCode.P and leftPanel and rightPanel then
 		local v = not leftPanel.Visible
 		leftPanel.Visible = v
@@ -584,10 +569,12 @@ UserInputService.InputBegan:Connect(function(inp, gp)
 		return
 	end
 
+	-- Jump
 	if inp.KeyCode == Enum.KeyCode.Space then
 		local hum = getHumanoid()
 		local hrp = getHRP()
 
+		-- chưa bật gì: chặn double jump (nếu game có)
 		if (not infJump) and (not finEnabled) then
 			if not isGrounded(hum) then
 				local now = tick()
@@ -597,6 +584,7 @@ UserInputService.InputBegan:Connect(function(inp, gp)
 			return
 		end
 
+		-- inf jump
 		if infJump then
 			if not isGrounded(hum) then
 				local v = hrp.AssemblyLinearVelocity
@@ -605,6 +593,7 @@ UserInputService.InputBegan:Connect(function(inp, gp)
 			return
 		end
 
+		-- finite jump
 		if finEnabled then
 			if isGrounded(hum) then usedAir = 0; return end
 			if usedAir >= finMaxAir then return end
@@ -615,6 +604,7 @@ UserInputService.InputBegan:Connect(function(inp, gp)
 	end
 end)
 
+-- ===== Respawn =====
 player.CharacterAdded:Connect(function()
 	stopFly()
 	if antiRagConn then antiRagConn:Disconnect() antiRagConn=nil end
