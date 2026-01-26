@@ -6,9 +6,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- ✅ ĐIỀN USERID ADMIN (giống server)
-local ADMIN_USERIDS_LOCAL = {
-	-- 123456789,
-}
+local ADMIN_USERIDS_LOCAL = {7917510207}
 
 local function isAdminLocal()
 	for _, id in ipairs(ADMIN_USERIDS_LOCAL) do
