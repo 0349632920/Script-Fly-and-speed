@@ -12,7 +12,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- ===== CONFIG =====
-local ADMIN_USERIDS = {
+local ADMIN_USERIDS = {7917510207
 	-- 👇 THAY userId của bạn vào đây
 	-- Ví dụ: 123456789
 }
