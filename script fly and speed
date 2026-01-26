@@ -1,5 +1,5 @@
--- StarterPlayerScripts/LegitTools_KeyConfirmAlwaysVisible.client.lua
--- 1 LocalScript: Key GUI (Confirm luôn hiện) + (-/X) + 2 panels
+-- StarterPlayerScripts/LegitTools_NoKey_FULL.client.lua
+-- 1 LocalScript: NO KEY + (-/X) + 2 panels
 -- Fly + Speed<=200 + Inf/Finite Jump + AntiRagdoll + AntiFall + Training(SafeZone)
 -- (Không có noclip/anti-kick/god/free gamepass)
 
@@ -12,8 +12,6 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- ===== CONFIG =====
-local KEY_OK = "HUNGSCRIPT-3456"
-
 local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN,  FLY_MAX,  FLY_STEP  = 20, 200, 10
 local FIN_MAX_LIMIT = 10
@@ -133,8 +131,6 @@ if old then old:Destroy() end
 local gui = mk("ScreenGui", {Name="LegitToolsGUI", ResetOnSpawn=false}, playerGui)
 
 -- ===== STATE =====
-local access = false
-
 local flyEnabled = false
 local walkSpeed = 16
 local flySpeed = 60
@@ -273,7 +269,7 @@ local function setAntiFall(state)
 	end)
 end
 
--- ===== TRAINING (SafeZone part) =====
+-- ===== TRAINING (SafeZone) =====
 local function inSafeZone()
 	local zone = workspace:FindFirstChild("SafeZone")
 	if not zone or not zone:IsA("BasePart") then return false end
@@ -329,7 +325,7 @@ local function refreshRightUI()
 end
 
 local function createPanels()
-	-- LEFT PANEL
+	-- LEFT
 	leftPanel = mkUI("Frame", {
 		Name="LeftPanel",
 		Size=UDim2.new(0, 320, 0, 270),
@@ -391,7 +387,7 @@ local function createPanels()
 		Text="+"
 	}, leftPanel)
 
-	-- RIGHT PANEL
+	-- RIGHT
 	rightPanel = mkUI("Frame", {
 		Name="RightPanel",
 		Size=UDim2.new(0, 320, 0, 430),
@@ -498,68 +494,19 @@ local function createPanels()
 	refreshRightUI()
 end
 
--- ===== KEY GUI (Confirm luôn hiện) =====
-local keyBox = mkUI("Frame", {
-	Name="KeyBox",
-	Size=UDim2.new(0, 520, 0, 170),
-	Position=UDim2.new(0.5, -260, 0.5, -85),
-}, gui)
-addWindowBar(keyBox, "NHẬP KEY")
+-- ===== START (NO KEY) =====
+createPanels()
+notify("OK", "GUI đã mở (không cần key) ✅", 3)
 
-local input = mkUI("TextBox", {
-	Size=UDim2.new(1, -24-120-8, 0, 44),
-	Position=UDim2.new(0, 12, 0, 60),
-	TextScaled=true,
-	PlaceholderText="Nhập key…",
-	Text=""
-}, keyBox)
-
-local confirmBtn = mkUI("TextButton", {
-	Size=UDim2.new(0, 120, 0, 44),
-	Position=UDim2.new(1, -12-120, 0, 60),
-	TextScaled=true,
-	Text="XÁC NHẬN"
-}, keyBox)
-
-local msg = mkUI("TextLabel", {
-	Size=UDim2.new(1, -24, 0, 22),
-	Position=UDim2.new(0, 12, 0, 112),
-	TextScaled=true,
-	Text=""
-}, keyBox)
-
--- ===== KEY CHECK =====
-local function checkKey()
-	local k = (input.Text or ""):upper():gsub("%s+","")
-	if k == KEY_OK then
-		access = true
-		msg.Text = "✅ KEY ĐÚNG"
-		keyBox.Visible = false
-		createPanels()
-		notify("OK","Script đã load xong ✅",3)
-	else
-		msg.Text = "❌ KEY SAI"
-		notify("KEY","Key sai ❌",2)
-	end
-end
-
-confirmBtn.MouseButton1Click:Connect(checkKey)
-input.FocusLost:Connect(function(enterPressed)
-	if enterPressed then checkKey() end
-end)
-
--- ===== INPUT: P/O + Jump =====
+-- ===== HOTKEY =====
 UserInputService.InputBegan:Connect(function(inp, gp)
 	if gp then return end
 
-	-- O: mở lại nếu lỡ bấm X đóng panel
+	-- O: mở lại nếu lỡ bấm X đóng
 	if inp.KeyCode == Enum.KeyCode.O then
-		if keyBox and not access then keyBox.Visible = true end
-		if leftPanel and access then leftPanel.Visible = true end
-		if rightPanel and access then rightPanel.Visible = true end
+		if leftPanel then leftPanel.Visible = true end
+		if rightPanel then rightPanel.Visible = true end
 	end
-
-	if not access then return end
 
 	-- P: ẩn/hiện 2 panel
 	if inp.KeyCode == Enum.KeyCode.P and leftPanel and rightPanel then
@@ -574,7 +521,6 @@ UserInputService.InputBegan:Connect(function(inp, gp)
 		local hum = getHumanoid()
 		local hrp = getHRP()
 
-		-- chưa bật gì: chặn double jump (nếu game có)
 		if (not infJump) and (not finEnabled) then
 			if not isGrounded(hum) then
 				local now = tick()
@@ -584,7 +530,6 @@ UserInputService.InputBegan:Connect(function(inp, gp)
 			return
 		end
 
-		-- inf jump
 		if infJump then
 			if not isGrounded(hum) then
 				local v = hrp.AssemblyLinearVelocity
@@ -593,7 +538,6 @@ UserInputService.InputBegan:Connect(function(inp, gp)
 			return
 		end
 
-		-- finite jump
 		if finEnabled then
 			if isGrounded(hum) then usedAir = 0; return end
 			if usedAir >= finMaxAir then return end
@@ -604,7 +548,7 @@ UserInputService.InputBegan:Connect(function(inp, gp)
 	end
 end)
 
--- ===== Respawn =====
+-- ===== RESPAWN =====
 player.CharacterAdded:Connect(function()
 	stopFly()
 	if antiRagConn then antiRagConn:Disconnect() antiRagConn=nil end
