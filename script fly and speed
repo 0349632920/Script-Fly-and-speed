@@ -1,90 +1,272 @@
--- ServerScriptService/AdminToolsServer.server.lua
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local DataStoreService = game:GetService("DataStoreService")
+-- ADMIN LEGIT TOOLS - SINGLE FILE
+-- Local only | Safe | Mobile friendly
+-- Place as LocalScript in StarterPlayerScripts
 
+------------------------
+-- SERVICES
+------------------------
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+------------------------
+-- CONFIG
+------------------------
 local ADMIN_USERIDS = {
-	7917510207, -- đổi userId admin
+	7917510207, -- 👈 đổi userId của bạn
 }
 
-local function isAdmin(plr: Player)
+local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
+local FLY_MIN, FLY_MAX, FLY_STEP = 20, 200, 10
+
+------------------------
+-- HELPERS
+------------------------
+local function notify(t, m, d)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = t or "INFO",
+			Text = m or "",
+			Duration = d or 3
+		})
+	end)
+end
+
+local function isAdmin()
 	for _, id in ipairs(ADMIN_USERIDS) do
-		if plr.UserId == id then return true end
+		if player.UserId == id then return true end
 	end
 	return false
 end
 
--- Remotes
-local folder = ReplicatedStorage:FindFirstChild("AdminTools") or Instance.new("Folder", ReplicatedStorage)
-folder.Name = "AdminTools"
-local remote = folder:FindFirstChild("AdminAction") or Instance.new("RemoteEvent", folder)
-remote.Name = "AdminAction"
-
--- Save settings per admin (optional)
-local store = DataStoreService:GetDataStore("AdminToolsSettings_v1")
-
-local function getChar(plr) return plr.Character end
-local function getHum(plr)
-	local c = getChar(plr)
-	return c and c:FindFirstChildOfClass("Humanoid")
-end
-local function getHRP(plr)
-	local c = getChar(plr)
-	return c and c:FindFirstChild("HumanoidRootPart")
+local function char()
+	return player.Character or player.CharacterAdded:Wait()
 end
 
-remote.OnServerEvent:Connect(function(plr, action, data)
-	if not isAdmin(plr) then return end
-	data = data or {}
+local function hum()
+	return char():WaitForChild("Humanoid")
+end
 
-	if action == "TP_TO_PLAYER" then
-		local targetName = data.targetName
-		local target = targetName and Players:FindFirstChild(targetName)
-		if not target then return end
-		local a = getHRP(plr)
-		local b = getHRP(target)
-		if a and b then
-			a.CFrame = b.CFrame + Vector3.new(0, 5, 0)
+local function hrp()
+	return char():WaitForChild("HumanoidRootPart")
+end
+
+local function clamp(v,a,b)
+	return math.max(a, math.min(b,v))
+end
+
+------------------------
+-- CLEAN OLD GUI
+------------------------
+local old = playerGui:FindFirstChild("AdminLegitGUI")
+if old then old:Destroy() end
+
+------------------------
+-- UI CORE
+------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "AdminLegitGUI"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+
+local function mk(class, props, parent)
+	local o = Instance.new(class)
+	for k,v in pairs(props or {}) do o[k] = v end
+	o.Parent = parent
+	return o
+end
+
+local function round(o, r)
+	mk("UICorner", {CornerRadius = UDim.new(0, r or 12)}, o)
+end
+
+local function styleFrame(f)
+	f.BackgroundColor3 = Color3.fromRGB(25,25,25)
+	f.BackgroundTransparency = 0.1
+	round(f,14)
+	mk("UIStroke",{Transparency=0.4},f)
+end
+
+local function styleBtn(b)
+	b.BackgroundColor3 = Color3.fromRGB(45,45,45)
+	b.BackgroundTransparency = 0.05
+	b.TextColor3 = Color3.new(1,1,1)
+	b.TextScaled = true
+	b.AutoButtonColor = true
+	round(b,10)
+end
+
+------------------------
+-- STATE
+------------------------
+local walkSpeed = 16
+local flySpeed = 60
+local flying = false
+local bv, bg, flyConn
+
+------------------------
+-- FLY
+------------------------
+local function stopFly()
+	flying = false
+	if flyConn then flyConn:Disconnect() flyConn=nil end
+	if bv then bv:Destroy() bv=nil end
+	if bg then bg:Destroy() bg=nil end
+end
+
+local function startFly()
+	if flying then return end
+	flying = true
+
+	local root = hrp()
+
+	bv = Instance.new("BodyVelocity")
+	bv.MaxForce = Vector3.new(1e9,1e9,1e9)
+	bv.Parent = root
+
+	bg = Instance.new("BodyGyro")
+	bg.MaxTorque = Vector3.new(1e9,1e9,1e9)
+	bg.P = 9e4
+	bg.Parent = root
+
+	flyConn = RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera
+		if not cam then return end
+
+		local move = Vector3.zero
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+
+		if move.Magnitude > 0 then
+			move = move.Unit * flySpeed
 		end
 
-	elseif action == "TP_SPAWN" then
-		local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
-		local a = getHRP(plr)
-		if spawn and a then a.CFrame = spawn.CFrame + Vector3.new(0, 5, 0) end
+		bv.Velocity = move
+		bg.CFrame = cam.CFrame
+	end)
+end
 
-	elseif action == "TP_SAFEZONE" then
-		local safe = workspace:FindFirstChild("SafeZone")
-		local a = getHRP(plr)
-		if safe and safe:IsA("BasePart") and a then
-			a.CFrame = safe.CFrame + Vector3.new(0, 5, 0)
-		end
+------------------------
+-- MAIN PANEL
+------------------------
+local panel = mk("Frame",{
+	Size = UDim2.new(0,320,0,420),
+	Position = UDim2.new(0,20,0,60)
+},gui)
+styleFrame(panel)
 
-	elseif action == "HEAL" then
-		local h = getHum(plr)
-		if h then h.Health = h.MaxHealth end
+------------------------
+-- FLOATING OPEN BUTTON (MOBILE)
+------------------------
+local openBtn = mk("TextButton",{
+	Size = UDim2.new(0,70,0,70),
+	Position = UDim2.new(0,20,1,-90),
+	Text = "TOOLS"
+},gui)
+styleBtn(openBtn)
 
-	elseif action == "RESET" then
-		local h = getHum(plr)
-		if h then h.Health = 0 end
+openBtn.MouseButton1Click:Connect(function()
+	panel.Visible = not panel.Visible
+end)
 
-	elseif action == "SET_WALK_SPEED" then
-		local h = getHum(plr)
-		local sp = tonumber(data.walkSpeed)
-		if h and sp then
-			h.WalkSpeed = math.clamp(sp, 16, 200)
-		end
+------------------------
+-- TITLE
+------------------------
+mk("TextLabel",{
+	Size = UDim2.new(1,-20,0,36),
+	Position = UDim2.new(0,10,0,10),
+	Text = isAdmin() and "ADMIN LEGIT TOOLS" or "LEGIT TOOLS",
+	TextScaled = true,
+	TextColor3 = Color3.new(1,1,1),
+	BackgroundTransparency = 1
+},panel)
 
-	elseif action == "SAVE_SETTINGS" then
-		local ok = pcall(function()
-			store:SetAsync(tostring(plr.UserId), data)
-		end)
-		remote:FireClient(plr, "SAVE_RESULT", { ok = ok })
+------------------------
+-- BUTTON FACTORY
+------------------------
+local y = 56
+local function addBtn(text, cb)
+	local b = mk("TextButton",{
+		Size = UDim2.new(1,-24,0,42),
+		Position = UDim2.new(0,12,0,y),
+		Text = text
+	},panel)
+	styleBtn(b)
+	y += 48
+	b.MouseButton1Click:Connect(cb)
+	return b
+end
 
-	elseif action == "LOAD_SETTINGS" then
-		local saved
-		pcall(function()
-			saved = store:GetAsync(tostring(plr.UserId))
-		end)
-		remote:FireClient(plr, "LOAD_RESULT", saved or {})
+------------------------
+-- BUTTONS
+------------------------
+local flyBtn = addBtn("FLY: OFF", function()
+	if flying then
+		stopFly()
+		flyBtn.Text = "FLY: OFF"
+	else
+		startFly()
+		flyBtn.Text = "FLY: ON"
 	end
 end)
+
+addBtn("SPEED +", function()
+	walkSpeed = clamp(walkSpeed + WALK_STEP, WALK_MIN, WALK_MAX)
+	hum().WalkSpeed = walkSpeed
+	notify("SPEED", tostring(walkSpeed), 1)
+end)
+
+addBtn("SPEED -", function()
+	walkSpeed = clamp(walkSpeed - WALK_STEP, WALK_MIN, WALK_MAX)
+	hum().WalkSpeed = walkSpeed
+	notify("SPEED", tostring(walkSpeed), 1)
+end)
+
+------------------------
+-- ADMIN ONLY
+------------------------
+if isAdmin() then
+	addBtn("TP TO CLICKED PLAYER", function()
+		local mouse = player:GetMouse()
+		notify("ADMIN","Click vào player",2)
+		mouse.Button1Down:Wait()
+		if mouse.Target and mouse.Target.Parent then
+			local h = mouse.Target.Parent:FindFirstChild("HumanoidRootPart")
+			if h then
+				hrp().CFrame = h.CFrame + Vector3.new(0,5,0)
+			end
+		end
+	end)
+
+	addBtn("TP TO SPAWN", function()
+		local s = workspace:FindFirstChildOfClass("SpawnLocation")
+		if s then hrp().CFrame = s.CFrame + Vector3.new(0,5,0) end
+	end)
+
+	addBtn("HEAL", function()
+		hum().Health = hum().MaxHealth
+	end)
+
+	addBtn("RESET", function()
+		hum().Health = 0
+	end)
+end
+
+------------------------
+-- RESPAWN FIX
+------------------------
+player.CharacterAdded:Connect(function()
+	stopFly()
+	task.wait(0.1)
+	hum().WalkSpeed = walkSpeed
+end)
+
+notify("OK","GUI loaded successfully",3)
