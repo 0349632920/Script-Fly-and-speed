@@ -1,324 +1,90 @@
---[[ 
-ADMIN LEGIT TOOLS – FULL SINGLE FILE
-Local only – Safe – No Remote – No Key
-Fly / Speed / Jump / Anti / Training
-Admin: TP Player / Spawn / SafeZone / Heal / Reset / Freeze
-Mobile friendly (floating open button)
-]]
-
---------------------------------------------------
--- SERVICES
---------------------------------------------------
+-- ServerScriptService/AdminToolsServer.server.lua
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local StarterGui = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-
---------------------------------------------------
--- CONFIG
---------------------------------------------------
 local ADMIN_USERIDS = {
-	7917510207, -- 👈 userId admin của bạn
+	7917510207, -- đổi userId admin
 }
 
-local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
-local FLY_MIN, FLY_MAX, FLY_STEP = 20, 200, 10
-local FIN_MAX_LIMIT = 10
-local FIN_BOOST_LIMIT = 200
-
---------------------------------------------------
--- HELPERS
---------------------------------------------------
-local function notify(t, m, d)
-	pcall(function()
-		StarterGui:SetCore("SendNotification", {
-			Title = t or "INFO",
-			Text = m or "",
-			Duration = d or 3
-		})
-	end)
-end
-
-local function isAdmin()
+local function isAdmin(plr: Player)
 	for _, id in ipairs(ADMIN_USERIDS) do
-		if player.UserId == id then
-			return true
-		end
+		if plr.UserId == id then return true end
 	end
 	return false
 end
 
-local function clamp(v, a, b)
-	return math.max(a, math.min(b, v))
+-- Remotes
+local folder = ReplicatedStorage:FindFirstChild("AdminTools") or Instance.new("Folder", ReplicatedStorage)
+folder.Name = "AdminTools"
+local remote = folder:FindFirstChild("AdminAction") or Instance.new("RemoteEvent", folder)
+remote.Name = "AdminAction"
+
+-- Save settings per admin (optional)
+local store = DataStoreService:GetDataStore("AdminToolsSettings_v1")
+
+local function getChar(plr) return plr.Character end
+local function getHum(plr)
+	local c = getChar(plr)
+	return c and c:FindFirstChildOfClass("Humanoid")
+end
+local function getHRP(plr)
+	local c = getChar(plr)
+	return c and c:FindFirstChild("HumanoidRootPart")
 end
 
-local function char()
-	return player.Character or player.CharacterAdded:Wait()
-end
+remote.OnServerEvent:Connect(function(plr, action, data)
+	if not isAdmin(plr) then return end
+	data = data or {}
 
-local function hum()
-	return char():WaitForChild("Humanoid")
-end
-
-local function hrp()
-	return char():WaitForChild("HumanoidRootPart")
-end
-
---------------------------------------------------
--- CLEAN OLD GUI
---------------------------------------------------
-local old = playerGui:FindFirstChild("AdminLegitGUI")
-if old then old:Destroy() end
-
---------------------------------------------------
--- UI CORE
---------------------------------------------------
-local gui = Instance.new("ScreenGui")
-gui.Name = "AdminLegitGUI"
-gui.ResetOnSpawn = false
-gui.Parent = playerGui
-
-local function mk(class, props, parent)
-	local o = Instance.new(class)
-	for k,v in pairs(props or {}) do o[k] = v end
-	o.Parent = parent
-	return o
-end
-
-local function styleFrame(f)
-	f.BackgroundColor3 = Color3.fromRGB(25,25,25)
-	f.BackgroundTransparency = 0.1
-	mk("UICorner",{CornerRadius=UDim.new(0,14)},f)
-	mk("UIStroke",{Transparency=0.4},f)
-end
-
-local function styleBtn(b)
-	b.BackgroundColor3 = Color3.fromRGB(45,45,45)
-	b.TextColor3 = Color3.new(1,1,1)
-	b.TextScaled = true
-	b.AutoButtonColor = true’
-	mk("UICorner",{CornerRadius=UDim.new(0,10)},b)
-end
-
---------------------------------------------------
--- STATE
---------------------------------------------------
-local walkSpeed = 16
-local flySpeed = 60
-local fly = false
-local bv, bg, flyConn
-
-local infJump = false
-local finJump = false
-local finMax = 2
-local finBoost = 55
-local usedAir = 0
-local lastJump = 0
-
-local antiRagdoll = false
-local antiFall = false
-local training = false
-
-local freeze = false
-local freezeConn
-
---------------------------------------------------
--- GROUND RESET (FIX LEAK)
---------------------------------------------------
-local groundConn
-local function hookGround()
-	if groundConn then groundConn:Disconnect() end
-	groundConn = hum().StateChanged:Connect(function(_, s)
-		if s == Enum.HumanoidStateType.Landed
-		or s == Enum.HumanoidStateType.Running
-		or s == Enum.HumanoidStateType.RunningNoPhysics then
-			usedAir = 0
-		end
-	end)
-end
-hookGround()
-
---------------------------------------------------
--- FLY
---------------------------------------------------
-local function stopFly()
-	fly = false
-	if flyConn then flyConn:Disconnect() end
-	if bv then bv:Destroy() end
-	if bg then bg:Destroy() end
-end
-
-local function startFly()
-	if freeze then
-		notify("INFO","Đang Freeze – tắt Freeze trước",2)
-		return
-	end
-	if fly then return end
-	fly = true
-
-	bv = Instance.new("BodyVelocity")
-	bv.MaxForce = Vector3.new(1e9,1e9,1e9)
-	bv.Parent = hrp()
-
-	bg = Instance.new("BodyGyro")
-	bg.MaxTorque = Vector3.new(1e9,1e9,1e9)
-	bg.P = 9e4
-	bg.Parent = hrp()
-
-	flyConn = RunService.RenderStepped:Connect(function()
-		local cam = workspace.CurrentCamera
-		local move = Vector3.zero
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
-		if move.Magnitude > 0 then move = move.Unit * flySpeed end
-		bv.Velocity = move
-		bg.CFrame = cam.CFrame
-	end)
-end
-
---------------------------------------------------
--- UI MAIN PANEL
---------------------------------------------------
-local panel = mk("Frame",{
-	Size=UDim2.new(0,320,0,520),
-	Position=UDim2.new(0,20,0,60)
-},gui)
-styleFrame(panel)
-
---------------------------------------------------
--- FLOATING OPEN (MOBILE)
---------------------------------------------------
-local openBtn = mk("TextButton",{
-	Size=UDim2.new(0,60,0,60),
-	Position=UDim2.new(0,20,1,-80),
-	Text="OPEN"
-},gui)
-styleBtn(openBtn)
-
-panel.Visible = true
-
-openBtn.MouseButton1Click:Connect(function()
-	panel.Visible = not panel.Visible
-end
-
---------------------------------------------------
--- BUTTON FACTORY
---------------------------------------------------
-local y = 12
-local function addBtn(text, cb)
-	local b = mk("TextButton",{
-		Size=UDim2.new(1,-24,0,42),
-		Position=UDim2.new(0,12,0,y),
-		Text=text
-	},panel)
-	styleBtn(b)
-	y += 46
-	b.MouseButton1Click:Connect(cb)
-	return b
-end
-
---------------------------------------------------
--- BUTTONS
---------------------------------------------------
-addBtn("FLY", function()
-	if fly then stopFly() else startFly() end
-end)
-
-addBtn("INF JUMP", function() infJump = not infJump end)
-addBtn("FINITE JUMP", function() finJump = not finJump end)
-
-addBtn("SPEED +", function()
-	walkSpeed = clamp(walkSpeed + WALK_STEP, WALK_MIN, WALK_MAX)
-	hum().WalkSpeed = walkSpeed
-end)
-
-addBtn("SPEED -", function()
-	walkSpeed = clamp(walkSpeed - WALK_STEP, WALK_MIN, WALK_MAX)
-	hum().WalkSpeed = walkSpeed
-end)
-
---------------------------------------------------
--- ADMIN TOOLS
---------------------------------------------------
-if isAdmin() then
-	addBtn("TP PLAYER (CLICK)", function()
-		local mouse = player:GetMouse()
-		mouse.Button1Down:Wait()
-		if mouse.Target and mouse.Target.Parent then
-			local h = mouse.Target.Parent:FindFirstChild("HumanoidRootPart")
-			if h then
-				hrp().CFrame = h.CFrame + Vector3.new(0,5,0)
-			end
-		end
-	end)
-
-	addBtn("TP SPAWN", function()
-		local s = workspace:FindFirstChildOfClass("SpawnLocation")
-		if s then hrp().CFrame = s.CFrame + Vector3.new(0,5,0) end
-	end)
-
-	addBtn("HEAL", function()
-		hum().Health = hum().MaxHealth
-	end)
-
-	addBtn("RESET", function()
-		hum().Health = 0
-	end)
-
-	addBtn("FREEZE", function()
-		freeze = not freeze
-		if freeze then
-			freezeConn = RunService.Heartbeat:Connect(function()
-				hrp().AssemblyLinearVelocity = Vector3.zero
-				hum().WalkSpeed = 0
-				hum().JumpPower = 0
-			end)
-		else
-			if freezeConn then freezeConn:Disconnect() end
-			hum().WalkSpeed = walkSpeed
-			hum().JumpPower = 50
-		end
-	end)
-end
-
---------------------------------------------------
--- JUMP LOGIC
---------------------------------------------------
-UserInputService.InputBegan:Connect(function(i,gp)
-	if gp then return end
-	if i.KeyCode == Enum.KeyCode.Space then
-		local h = hum()
-		local r = hrp()
-
-		if infJump and h:GetState() ~= Enum.HumanoidStateType.Running then
-			r.AssemblyLinearVelocity = Vector3.new(r.Velocity.X, finBoost, r.Velocity.Z)
+	if action == "TP_TO_PLAYER" then
+		local targetName = data.targetName
+		local target = targetName and Players:FindFirstChild(targetName)
+		if not target then return end
+		local a = getHRP(plr)
+		local b = getHRP(target)
+		if a and b then
+			a.CFrame = b.CFrame + Vector3.new(0, 5, 0)
 		end
 
-		if finJump then
-			if usedAir >= finMax then return end
-			if tick() - lastJump < 0.15 then return end
-			lastJump = tick()
-			usedAir += 1
-			r.AssemblyLinearVelocity = Vector3.new(r.Velocity.X, finBoost, r.Velocity.Z)
+	elseif action == "TP_SPAWN" then
+		local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
+		local a = getHRP(plr)
+		if spawn and a then a.CFrame = spawn.CFrame + Vector3.new(0, 5, 0) end
+
+	elseif action == "TP_SAFEZONE" then
+		local safe = workspace:FindFirstChild("SafeZone")
+		local a = getHRP(plr)
+		if safe and safe:IsA("BasePart") and a then
+			a.CFrame = safe.CFrame + Vector3.new(0, 5, 0)
 		end
+
+	elseif action == "HEAL" then
+		local h = getHum(plr)
+		if h then h.Health = h.MaxHealth end
+
+	elseif action == "RESET" then
+		local h = getHum(plr)
+		if h then h.Health = 0 end
+
+	elseif action == "SET_WALK_SPEED" then
+		local h = getHum(plr)
+		local sp = tonumber(data.walkSpeed)
+		if h and sp then
+			h.WalkSpeed = math.clamp(sp, 16, 200)
+		end
+
+	elseif action == "SAVE_SETTINGS" then
+		local ok = pcall(function()
+			store:SetAsync(tostring(plr.UserId), data)
+		end)
+		remote:FireClient(plr, "SAVE_RESULT", { ok = ok })
+
+	elseif action == "LOAD_SETTINGS" then
+		local saved
+		pcall(function()
+			saved = store:GetAsync(tostring(plr.UserId))
+		end)
+		remote:FireClient(plr, "LOAD_RESULT", saved or {})
 	end
 end)
-
---------------------------------------------------
--- RESPAWN
---------------------------------------------------
-player.CharacterAdded:Connect(function()
-	stopFly()
-	task.wait(0.1)
-	hum().WalkSpeed = walkSpeed
-	hookGround()
-end)
-
-notify("OK", isAdmin() and "Admin Tools Ready" or "Tools Ready", 3)
