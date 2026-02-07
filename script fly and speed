@@ -1,31 +1,42 @@
--- ADMIN LEGIT TOOLS - SINGLE FILE
--- Local only | Safe | Mobile friendly
+-- ADMIN LEGIT TOOLS – FULL SINGLE FILE
+-- Local only | Mobile + PC | WORKS WITH PLAY (▶)
 -- Place as LocalScript in StarterPlayerScripts
 
-------------------------
+--------------------------------------------------
 -- SERVICES
-------------------------
+--------------------------------------------------
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 
+--------------------------------------------------
+-- FORCE GUI LOAD EVEN IN PLAY (▶)
+--------------------------------------------------
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
 
-------------------------
+-- chờ PlayerGui thật sự tồn tại
+while not player:FindFirstChild("PlayerGui") do
+	player.ChildAdded:Wait()
+end
+local playerGui = player.PlayerGui
+
+-- chờ 1 frame để Roblox gắn UI hệ thống xong
+RunService.RenderStepped:Wait()
+
+--------------------------------------------------
 -- CONFIG
-------------------------
+--------------------------------------------------
 local ADMIN_USERIDS = {
-	7917510207, -- 👈 đổi userId của bạn
+	7917510207, -- 👈 thay userId của bạn
 }
 
 local WALK_MIN, WALK_MAX, WALK_STEP = 16, 200, 10
 local FLY_MIN, FLY_MAX, FLY_STEP = 20, 200, 10
 
-------------------------
+--------------------------------------------------
 -- HELPERS
-------------------------
+--------------------------------------------------
 local function notify(t, m, d)
 	pcall(function()
 		StarterGui:SetCore("SendNotification", {
@@ -59,18 +70,19 @@ local function clamp(v,a,b)
 	return math.max(a, math.min(b,v))
 end
 
-------------------------
+--------------------------------------------------
 -- CLEAN OLD GUI
-------------------------
+--------------------------------------------------
 local old = playerGui:FindFirstChild("AdminLegitGUI")
 if old then old:Destroy() end
 
-------------------------
+--------------------------------------------------
 -- UI CORE
-------------------------
+--------------------------------------------------
 local gui = Instance.new("ScreenGui")
 gui.Name = "AdminLegitGUI"
 gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
 gui.Parent = playerGui
 
 local function mk(class, props, parent)
@@ -100,17 +112,17 @@ local function styleBtn(b)
 	round(b,10)
 end
 
-------------------------
+--------------------------------------------------
 -- STATE
-------------------------
+--------------------------------------------------
 local walkSpeed = 16
 local flySpeed = 60
 local flying = false
 local bv, bg, flyConn
 
-------------------------
+--------------------------------------------------
 -- FLY
-------------------------
+--------------------------------------------------
 local function stopFly()
 	flying = false
 	if flyConn then flyConn:Disconnect() flyConn=nil end
@@ -154,21 +166,21 @@ local function startFly()
 	end)
 end
 
-------------------------
+--------------------------------------------------
 -- MAIN PANEL
-------------------------
+--------------------------------------------------
 local panel = mk("Frame",{
 	Size = UDim2.new(0,320,0,420),
 	Position = UDim2.new(0,20,0,60)
 },gui)
 styleFrame(panel)
 
-------------------------
+--------------------------------------------------
 -- FLOATING OPEN BUTTON (MOBILE)
-------------------------
+--------------------------------------------------
 local openBtn = mk("TextButton",{
-	Size = UDim2.new(0,70,0,70),
-	Position = UDim2.new(0,20,1,-90),
+	Size = UDim2.new(0,72,0,72),
+	Position = UDim2.new(0,20,1,-92),
 	Text = "TOOLS"
 },gui)
 styleBtn(openBtn)
@@ -177,9 +189,9 @@ openBtn.MouseButton1Click:Connect(function()
 	panel.Visible = not panel.Visible
 end)
 
-------------------------
+--------------------------------------------------
 -- TITLE
-------------------------
+--------------------------------------------------
 mk("TextLabel",{
 	Size = UDim2.new(1,-20,0,36),
 	Position = UDim2.new(0,10,0,10),
@@ -189,9 +201,9 @@ mk("TextLabel",{
 	BackgroundTransparency = 1
 },panel)
 
-------------------------
+--------------------------------------------------
 -- BUTTON FACTORY
-------------------------
+--------------------------------------------------
 local y = 56
 local function addBtn(text, cb)
 	local b = mk("TextButton",{
@@ -205,9 +217,9 @@ local function addBtn(text, cb)
 	return b
 end
 
-------------------------
+--------------------------------------------------
 -- BUTTONS
-------------------------
+--------------------------------------------------
 local flyBtn = addBtn("FLY: OFF", function()
 	if flying then
 		stopFly()
@@ -230,9 +242,9 @@ addBtn("SPEED -", function()
 	notify("SPEED", tostring(walkSpeed), 1)
 end)
 
-------------------------
+--------------------------------------------------
 -- ADMIN ONLY
-------------------------
+--------------------------------------------------
 if isAdmin() then
 	addBtn("TP TO CLICKED PLAYER", function()
 		local mouse = player:GetMouse()
@@ -260,13 +272,13 @@ if isAdmin() then
 	end)
 end
 
-------------------------
--- RESPAWN FIX
-------------------------
+--------------------------------------------------
+-- RESPAWN SAFE
+--------------------------------------------------
 player.CharacterAdded:Connect(function()
 	stopFly()
 	task.wait(0.1)
 	hum().WalkSpeed = walkSpeed
 end)
 
-notify("OK","GUI loaded successfully",3)
+notify("OK","GUI loaded (Play ▶ compatible)",3)
