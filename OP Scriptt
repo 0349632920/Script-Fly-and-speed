@@ -8,16 +8,28 @@ local gui = Instance.new("ScreenGui")
 gui.ResetOnSpawn = false
 gui.Parent = player.PlayerGui
 
+-- nền đen
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,240,0,90)
+frame.Position = UDim2.new(0.4,0,0.2,0)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+frame.BorderSizePixel = 0
+frame.Parent = gui
+
+-- nút xanh
 local button = Instance.new("TextButton")
-button.Size = UDim2.new(0,120,0,50)
-button.Position = UDim2.new(0.85,0,0.7,0)
-button.BackgroundColor3 = Color3.fromRGB(0,170,255)
+button.Size = UDim2.new(1,-20,1,-20)
+button.Position = UDim2.new(0,10,0,10)
+button.BackgroundColor3 = Color3.fromRGB(25,150,220)
+button.BorderSizePixel = 0
+button.TextColor3 = Color3.new(1,1,1)
 button.TextScaled = true
-button.Text = "UP +50"
-button.Parent = gui
+button.Font = Enum.Font.SourceSansBold
+button.Text = "UP ⬆\n+50"
+button.Parent = frame
 
 --------------------------------------------------
--- TELEPORT LÊN 50 STUDS
+-- UP +50 STUDS
 --------------------------------------------------
 button.MouseButton1Click:Connect(function()
 
@@ -27,12 +39,12 @@ button.MouseButton1Click:Connect(function()
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	-- dịch chuyển lên trên 50 studs
+	-- dịch chuyển lên 50 studs
 	hrp.CFrame = hrp.CFrame + Vector3.new(0,50,0)
 end)
 
 --------------------------------------------------
--- DRAG GUI
+-- DRAG FRAME
 --------------------------------------------------
 local dragging = false
 local dragInput
@@ -41,7 +53,7 @@ local startPos
 
 local function update(input)
 	local delta = input.Position - dragStart
-	button.Position = UDim2.new(
+	frame.Position = UDim2.new(
 		startPos.X.Scale,
 		startPos.X.Offset + delta.X,
 		startPos.Y.Scale,
@@ -49,13 +61,13 @@ local function update(input)
 	)
 end
 
-button.InputBegan:Connect(function(input)
+frame.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1
 	or input.UserInputType == Enum.UserInputType.Touch then
 		
 		dragging = true
 		dragStart = input.Position
-		startPos = button.Position
+		startPos = frame.Position
 
 		input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
@@ -65,7 +77,7 @@ button.InputBegan:Connect(function(input)
 	end
 end)
 
-button.InputChanged:Connect(function(input)
+frame.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseMovement
 	or input.UserInputType == Enum.UserInputType.Touch then
 		dragInput = input
