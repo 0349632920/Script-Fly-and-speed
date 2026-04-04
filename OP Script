@@ -1,7 +1,8 @@
--- ADMIN GUI PRO
+-- ADMIN GUI PRO + ESP
 -- Put inside StarterPlayerScripts
 
 local player = game.Players.LocalPlayer
+local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
@@ -14,29 +15,25 @@ gui.Name = "AdminGUI"
 gui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0,220,0,300)
-frame.Position = UDim2.new(0,20,0.5,-150)
+frame.Size = UDim2.new(0,220,0,340)
+frame.Position = UDim2.new(0,20,0.5,-170)
 frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
 frame.Active = true
-frame.Draggable = true -- ✅ DRAG GUI
+frame.Draggable = true
 
 Instance.new("UIStroke", frame).Color = Color3.fromRGB(0,255,120)
 
 local layout = Instance.new("UIListLayout", frame)
 layout.Padding = UDim.new(0,6)
 
---------------------------------------------------
--- BUTTON MAKER
---------------------------------------------------
-
 local function makeButton(text)
-	local btn = Instance.new("TextButton", frame)
-	btn.Size = UDim2.new(1,-10,0,35)
-	btn.Position = UDim2.new(0,5,0,0)
-	btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
-	btn.TextColor3 = Color3.new(1,1,1)
-	btn.Text = text
-	return btn
+	local b = Instance.new("TextButton", frame)
+	b.Size = UDim2.new(1,-10,0,35)
+	b.Position = UDim2.new(0,5,0,0)
+	b.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	b.TextColor3 = Color3.new(1,1,1)
+	b.Text = text
+	return b
 end
 
 --------------------------------------------------
@@ -49,6 +46,7 @@ local flyBtn = makeButton("Fly : OFF")
 local speedBtn = makeButton("Speed : OFF")
 local noclipBtn = makeButton("Noclip : OFF")
 local antiBtn = makeButton("Anti Ragdoll : OFF")
+local espBtn = makeButton("ESP Player : OFF")
 
 --------------------------------------------------
 -- STATES
@@ -60,9 +58,11 @@ local fly=false
 local speed=false
 local noclip=false
 local anti=false
+local esp=false
 
 local bodyVel
 local bodyGyro
+local espObjects = {}
 
 --------------------------------------------------
 -- CHARACTER
@@ -85,13 +85,8 @@ godBtn.MouseButton1Click:Connect(function()
 
 	local hum = getHum()
 	if hum then
-		if god then
-			hum.MaxHealth = math.huge
-			hum.Health = math.huge
-		else
-			hum.MaxHealth = 100
-			hum.Health = 100
-		end
+		hum.MaxHealth = god and math.huge or 100
+		hum.Health = hum.MaxHealth
 	end
 end)
 
@@ -168,7 +163,7 @@ end)
 -- FLY
 --------------------------------------------------
 
-local speedFly = 60
+local flySpeed = 60
 
 local function startFly()
 	local char = player.Character
@@ -198,7 +193,7 @@ local function startFly()
 		if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
 		if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
 
-		bodyVel.Velocity = move * speedFly
+		bodyVel.Velocity = move * flySpeed
 	end)
 end
 
@@ -211,15 +206,64 @@ flyBtn.MouseButton1Click:Connect(function()
 	fly = not fly
 	flyBtn.Text = "Fly : "..(fly and "ON" or "OFF")
 
-	if fly then
-		startFly()
+	if fly then startFly() else stopFly() end
+end)
+
+--------------------------------------------------
+-- ESP PLAYER
+--------------------------------------------------
+
+local function createESP(plr)
+	if plr == player then return end
+
+	local function add(char)
+		if not esp then return end
+		if not char:FindFirstChild("HumanoidRootPart") then return end
+
+		local box = Instance.new("BoxHandleAdornment")
+		box.Adornee = char
+		box.AlwaysOnTop = true
+		box.Size = Vector3.new(4,6,2)
+		box.Color3 = Color3.fromRGB(0,255,120)
+		box.Transparency = 0.5
+		box.ZIndex = 10
+		box.Parent = char
+
+		espObjects[plr] = box
+	end
+
+	if plr.Character then add(plr.Character) end
+	plr.CharacterAdded:Connect(add)
+end
+
+local function clearESP()
+	for _,v in pairs(espObjects) do
+		if v then v:Destroy() end
+	end
+	espObjects = {}
+end
+
+espBtn.MouseButton1Click:Connect(function()
+	esp = not esp
+	espBtn.Text = "ESP Player : "..(esp and "ON" or "OFF")
+
+	if esp then
+		for _,plr in pairs(Players:GetPlayers()) do
+			createESP(plr)
+		end
 	else
-		stopFly()
+		clearESP()
+	end
+end)
+
+Players.PlayerAdded:Connect(function(plr)
+	if esp then
+		createESP(plr)
 	end
 end)
 
 --------------------------------------------------
--- OPEN CLOSE GUI (F2)
+-- OPEN/CLOSE GUI
 --------------------------------------------------
 
 UIS.InputBegan:Connect(function(input,gp)
