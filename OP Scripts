@@ -1,17 +1,19 @@
---// TP TO SPAWN THEN RETURN
+--// TP TO SPAWN THEN RETURN (FIXED VERSION)
 
 local player = game.Players.LocalPlayer
 local RunService = game:GetService("RunService")
 
-local PROTECT_TIME = 0.4
-local RETURN_DELAY = 0.1 -- thời gian đứng ở spawn
+local PROTECT_TIME = 0.6
+local RETURN_DELAY = 0.15
 
 local firstSpawnCF = nil
+local characterReady = false
 
 --------------------------------------------------
 -- GUI
 --------------------------------------------------
 local gui = Instance.new("ScreenGui")
+gui.Name = "TPSpawnGUI"
 gui.ResetOnSpawn = false
 gui.Parent = player.PlayerGui
 
@@ -52,28 +54,17 @@ local function antiRagdoll(char)
 end
 
 --------------------------------------------------
--- SAVE FIRST SPAWN
---------------------------------------------------
-local function saveFirstSpawn(char)
-    local hrp = char:WaitForChild("HumanoidRootPart")
-
-    if not firstSpawnCF then
-        task.wait(0.2)
-        firstSpawnCF = hrp.CFrame
-        print("Saved spawn position")
-    end
-
-    antiRagdoll(char)
-end
-
---------------------------------------------------
--- SAFE TP
+-- SAFE TP (ANTI SERVER PULLBACK)
 --------------------------------------------------
 local function safeTP(targetCF)
 
     local char = player.Character
-    local hrp = char:WaitForChild("HumanoidRootPart")
-    local hum = char:WaitForChild("Humanoid")
+    if not char then return end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+
+    if not hrp or not hum then return end
 
     local oldHealth = hum.Health
     hrp.CFrame = targetCF
@@ -81,11 +72,18 @@ local function safeTP(targetCF)
     local t = 0
     local con
     con = RunService.Heartbeat:Connect(function(dt)
+
         t += dt
+
+        if not hrp.Parent then
+            con:Disconnect()
+            return
+        end
 
         hrp.CFrame = targetCF
         hrp.AssemblyLinearVelocity = Vector3.zero
 
+        -- anti damage
         if hum.Health < oldHealth then
             hum.Health = oldHealth
         end
@@ -97,33 +95,56 @@ local function safeTP(targetCF)
 end
 
 --------------------------------------------------
--- MAIN TP LOGIC
+-- SAVE SPAWN (REAL FIX)
+--------------------------------------------------
+local function saveFirstSpawn(char)
+
+    characterReady = false
+
+    local hrp = char:WaitForChild("HumanoidRootPart")
+
+    -- chờ nhân vật đứng yên hẳn
+    task.wait(1)
+
+    if not firstSpawnCF then
+        firstSpawnCF = hrp.CFrame
+        print("✅ Spawn Saved")
+    end
+
+    antiRagdoll(char)
+    characterReady = true
+end
+
+--------------------------------------------------
+-- BUTTON LOGIC
 --------------------------------------------------
 btn.MouseButton1Click:Connect(function()
 
-    if not firstSpawnCF then return end
+    if not firstSpawnCF or not characterReady then
+        warn("Character not ready")
+        return
+    end
 
     local char = player.Character
-    local hrp = char:WaitForChild("HumanoidRootPart")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
 
-    -- lưu vị trí bấm TP
     local originalCF = hrp.CFrame
 
-    -- TP tới spawn
+    -- TP spawn
     safeTP(firstSpawnCF)
 
-    -- chờ
     task.wait(RETURN_DELAY)
 
-    -- TP quay lại
+    -- TP back
     safeTP(originalCF)
 end)
 
 --------------------------------------------------
--- CHARACTER
+-- CHARACTER EVENTS
 --------------------------------------------------
 if player.Character then
-    saveFirstSpawn(player.Character)
+    task.spawn(saveFirstSpawn, player.Character)
 end
 
 player.CharacterAdded:Connect(saveFirstSpawn)
