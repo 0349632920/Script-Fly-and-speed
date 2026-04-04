@@ -25,7 +25,7 @@ button.BorderSizePixel = 0
 button.TextColor3 = Color3.new(1,1,1)
 button.TextScaled = true
 button.Font = Enum.Font.SourceSansBold
-button.Text = "UP ⬆\n+50"
+button.Text = "UP ⬆\n+20"
 button.Parent = frame
 
 --------------------------------------------------
@@ -40,7 +40,7 @@ button.MouseButton1Click:Connect(function()
 	if not hrp then return end
 
 	-- dịch chuyển lên 50 studs
-	hrp.CFrame = hrp.CFrame + Vector3.new(0,50,0)
+	hrp.CFrame = hrp.CFrame + Vector3.new(0,20,0)
 end)
 
 --------------------------------------------------
