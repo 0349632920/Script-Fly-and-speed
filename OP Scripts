@@ -2,13 +2,14 @@
 
 local player = game.Players.LocalPlayer
 local RunService = game:GetService("RunService")
-local StarterGui = game:GetService("StarterGui")
 local camera = workspace.CurrentCamera
+local CoreGui = game:GetService("CoreGui")
 
 local PROTECT_TIME = 0.4
 local RETURN_DELAY = 0.1
 
 local firstSpawnCF = nil
+local tpBusy = false
 
 --------------------------------------------------
 -- GUI
@@ -95,7 +96,6 @@ local function saveFirstSpawn(char)
     if not firstSpawnCF then
         task.wait(0.2)
         firstSpawnCF = hrp.CFrame
-        print("Saved spawn position")
     end
 
     antiRagdoll(char)
@@ -132,10 +132,8 @@ local function safeTP(targetCF)
 end
 
 --------------------------------------------------
--- TP ACTION (DÙNG CHUNG)
+-- TP ACTION
 --------------------------------------------------
-local tpBusy = false
-
 local function doTP()
     if tpBusy then return end
     if not firstSpawnCF then return end
@@ -163,23 +161,37 @@ end
 btn.MouseButton1Click:Connect(doTP)
 
 --------------------------------------------------
--- AUTO TP WHEN BACKPACK UI HIDDEN
+-- DETECT VÙNG TÚI ĐỒ (REAL UI CHECK)
 --------------------------------------------------
+local function backpackVisible()
+
+    local backpackGui = CoreGui:FindFirstChild("Backpack", true)
+    if not backpackGui then
+        return false
+    end
+
+    if backpackGui:IsA("GuiObject") then
+        return backpackGui.Visible and backpackGui.AbsoluteSize.Magnitude > 0
+    end
+
+    return true
+end
+
 task.spawn(function()
 
-    local lastState = true
+    local lastVisible = true
 
     while true do
-        task.wait(0.2)
+        task.wait(0.15)
 
-        local enabled = StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.Backpack)
+        local visible = backpackVisible()
 
-        -- khi túi đồ bị ẩn
-        if lastState == true and enabled == false then
+        -- nếu vùng túi đồ biến mất
+        if lastVisible and not visible then
             doTP()
         end
 
-        lastState = enabled
+        lastVisible = visible
     end
 end)
 
