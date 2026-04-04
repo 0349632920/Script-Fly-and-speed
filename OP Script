@@ -1,0 +1,230 @@
+-- ADMIN GUI PRO
+-- Put inside StarterPlayerScripts
+
+local player = game.Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+
+local gui = Instance.new("ScreenGui", player.PlayerGui)
+gui.Name = "AdminGUI"
+gui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0,220,0,300)
+frame.Position = UDim2.new(0,20,0.5,-150)
+frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+frame.Active = true
+frame.Draggable = true -- ✅ DRAG GUI
+
+Instance.new("UIStroke", frame).Color = Color3.fromRGB(0,255,120)
+
+local layout = Instance.new("UIListLayout", frame)
+layout.Padding = UDim.new(0,6)
+
+--------------------------------------------------
+-- BUTTON MAKER
+--------------------------------------------------
+
+local function makeButton(text)
+	local btn = Instance.new("TextButton", frame)
+	btn.Size = UDim2.new(1,-10,0,35)
+	btn.Position = UDim2.new(0,5,0,0)
+	btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	btn.TextColor3 = Color3.new(1,1,1)
+	btn.Text = text
+	return btn
+end
+
+--------------------------------------------------
+-- BUTTONS
+--------------------------------------------------
+
+local godBtn = makeButton("God Mode : OFF")
+local jumpBtn = makeButton("Inf Jump : OFF")
+local flyBtn = makeButton("Fly : OFF")
+local speedBtn = makeButton("Speed : OFF")
+local noclipBtn = makeButton("Noclip : OFF")
+local antiBtn = makeButton("Anti Ragdoll : OFF")
+
+--------------------------------------------------
+-- STATES
+--------------------------------------------------
+
+local god=false
+local infJump=false
+local fly=false
+local speed=false
+local noclip=false
+local anti=false
+
+local bodyVel
+local bodyGyro
+
+--------------------------------------------------
+-- CHARACTER
+--------------------------------------------------
+
+local function getHum()
+	local char = player.Character
+	if char then
+		return char:FindFirstChildOfClass("Humanoid")
+	end
+end
+
+--------------------------------------------------
+-- GOD MODE
+--------------------------------------------------
+
+godBtn.MouseButton1Click:Connect(function()
+	god = not god
+	godBtn.Text = "God Mode : "..(god and "ON" or "OFF")
+
+	local hum = getHum()
+	if hum then
+		if god then
+			hum.MaxHealth = math.huge
+			hum.Health = math.huge
+		else
+			hum.MaxHealth = 100
+			hum.Health = 100
+		end
+	end
+end)
+
+--------------------------------------------------
+-- INFINITE JUMP
+--------------------------------------------------
+
+jumpBtn.MouseButton1Click:Connect(function()
+	infJump = not infJump
+	jumpBtn.Text = "Inf Jump : "..(infJump and "ON" or "OFF")
+end)
+
+UIS.JumpRequest:Connect(function()
+	if infJump then
+		local hum = getHum()
+		if hum then
+			hum:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end
+end)
+
+--------------------------------------------------
+-- SPEED
+--------------------------------------------------
+
+speedBtn.MouseButton1Click:Connect(function()
+	speed = not speed
+	speedBtn.Text = "Speed : "..(speed and "ON" or "OFF")
+
+	local hum = getHum()
+	if hum then
+		hum.WalkSpeed = speed and 40 or 16
+	end
+end)
+
+--------------------------------------------------
+-- NOCLIP
+--------------------------------------------------
+
+RunService.Stepped:Connect(function()
+	if noclip and player.Character then
+		for _,v in pairs(player.Character:GetDescendants()) do
+			if v:IsA("BasePart") then
+				v.CanCollide = false
+			end
+		end
+	end
+end)
+
+noclipBtn.MouseButton1Click:Connect(function()
+	noclip = not noclip
+	noclipBtn.Text = "Noclip : "..(noclip and "ON" or "OFF")
+end)
+
+--------------------------------------------------
+-- ANTI RAGDOLL
+--------------------------------------------------
+
+RunService.RenderStepped:Connect(function()
+	if anti then
+		local hum = getHum()
+		if hum then
+			hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end
+	end
+end)
+
+antiBtn.MouseButton1Click:Connect(function()
+	anti = not anti
+	antiBtn.Text = "Anti Ragdoll : "..(anti and "ON" or "OFF")
+end)
+
+--------------------------------------------------
+-- FLY
+--------------------------------------------------
+
+local speedFly = 60
+
+local function startFly()
+	local char = player.Character
+	if not char then return end
+
+	local root = char:WaitForChild("HumanoidRootPart")
+
+	bodyGyro = Instance.new("BodyGyro", root)
+	bodyGyro.MaxTorque = Vector3.new(9e9,9e9,9e9)
+	bodyGyro.P = 9e4
+
+	bodyVel = Instance.new("BodyVelocity", root)
+	bodyVel.MaxForce = Vector3.new(9e9,9e9,9e9)
+
+	RunService.RenderStepped:Connect(function()
+		if not fly then return end
+
+		local cam = workspace.CurrentCamera
+		bodyGyro.CFrame = cam.CFrame
+
+		local move = Vector3.zero
+
+		if UIS:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+		if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+
+		bodyVel.Velocity = move * speedFly
+	end)
+end
+
+local function stopFly()
+	if bodyVel then bodyVel:Destroy() end
+	if bodyGyro then bodyGyro:Destroy() end
+end
+
+flyBtn.MouseButton1Click:Connect(function()
+	fly = not fly
+	flyBtn.Text = "Fly : "..(fly and "ON" or "OFF")
+
+	if fly then
+		startFly()
+	else
+		stopFly()
+	end
+end)
+
+--------------------------------------------------
+-- OPEN CLOSE GUI (F2)
+--------------------------------------------------
+
+UIS.InputBegan:Connect(function(input,gp)
+	if gp then return end
+	if input.KeyCode == Enum.KeyCode.F2 then
+		frame.Visible = not frame.Visible
+	end
+end)
