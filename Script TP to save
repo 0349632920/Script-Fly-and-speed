@@ -1,0 +1,200 @@
+--// SERVICES
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
+
+----------------------------------------------------------------
+-- AUTO CREATE REMOTEEVENT
+----------------------------------------------------------------
+local remote = ReplicatedStorage:FindFirstChild("SaveTPRemote")
+
+if not remote then
+	remote = Instance.new("RemoteEvent")
+	remote.Name = "SaveTPRemote"
+	remote.Parent = ReplicatedStorage
+end
+
+----------------------------------------------------------------
+-- SERVER SIDE
+----------------------------------------------------------------
+if RunService:IsServer() then
+
+	local store = DataStoreService:GetDataStore("MultiSaveSlots")
+	local saves = {}
+
+	Players.PlayerAdded:Connect(function(plr)
+		local data
+		pcall(function()
+			data = store:GetAsync(plr.UserId)
+		end)
+		saves[plr.UserId] = data or {}
+	end)
+
+	Players.PlayerRemoving:Connect(function(plr)
+		pcall(function()
+			store:SetAsync(plr.UserId, saves[plr.UserId])
+		end)
+	end)
+
+	remote.OnServerEvent:Connect(function(plr,action,slot)
+
+		local char = plr.Character
+		if not char then return end
+
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+
+		saves[plr.UserId] = saves[plr.UserId] or {}
+
+		if action == "SAVE" then
+			saves[plr.UserId][slot] = {
+				root.Position.X,
+				root.Position.Y,
+				root.Position.Z
+			}
+
+		elseif action == "TP" then
+			local data = saves[plr.UserId][slot]
+			if data then
+				root.CFrame = CFrame.new(unpack(data))
+			end
+
+		elseif action == "DELETE" then
+			saves[plr.UserId][slot] = nil
+		end
+	end)
+
+	return
+end
+
+----------------------------------------------------------------
+-- CLIENT SIDE
+----------------------------------------------------------------
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+--------------------------------------------------
+-- KEY SYSTEM
+--------------------------------------------------
+local SECRET_KEY = "HUNG123" -- đổi key tại đây
+
+local gui = Instance.new("ScreenGui",playerGui)
+gui.Name = "SaveSystem"
+
+-- KEY FRAME
+local keyFrame = Instance.new("Frame",gui)
+keyFrame.Size = UDim2.new(0,250,0,120)
+keyFrame.Position = UDim2.new(0.5,-125,0.5,-60)
+keyFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+
+local box = Instance.new("TextBox",keyFrame)
+box.Size = UDim2.new(0.8,0,0,30)
+box.Position = UDim2.new(0.1,0,0.3,0)
+box.PlaceholderText = "Enter Key..."
+
+local enter = Instance.new("TextButton",keyFrame)
+enter.Size = UDim2.new(0.5,0,0,30)
+enter.Position = UDim2.new(0.25,0,0.65,0)
+enter.Text = "ENTER"
+
+--------------------------------------------------
+-- MAIN GUI
+--------------------------------------------------
+local main = Instance.new("Frame",gui)
+main.Size = UDim2.new(0,220,0,260)
+main.Position = UDim2.new(0,20,0.5,-130)
+main.BackgroundColor3 = Color3.fromRGB(30,30,30)
+main.Visible = false
+
+local title = Instance.new("TextLabel",main)
+title.Size = UDim2.new(1,0,0,30)
+title.Text = "SAVE SLOTS"
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.new(1,1,1)
+
+-- close button
+local close = Instance.new("TextButton",main)
+close.Size = UDim2.new(0,30,0,30)
+close.Position = UDim2.new(1,-30,0,0)
+close.Text = "X"
+
+-- open button
+local open = Instance.new("TextButton",gui)
+open.Size = UDim2.new(0,60,0,30)
+open.Position = UDim2.new(0,20,0.5,140)
+open.Text = "OPEN"
+open.Visible = false
+
+close.MouseButton1Click:Connect(function()
+	main.Visible = false
+	open.Visible = true
+end)
+
+open.MouseButton1Click:Connect(function()
+	main.Visible = true
+	open.Visible = false
+end)
+
+-- Saved text
+local savedText = Instance.new("TextLabel",main)
+savedText.Size = UDim2.new(1,0,0,25)
+savedText.Position = UDim2.new(0,0,1,-25)
+savedText.BackgroundTransparency = 1
+savedText.TextColor3 = Color3.fromRGB(0,255,0)
+
+local function showSaved()
+	savedText.Text = "Saved!"
+	task.wait(1.5)
+	savedText.Text = ""
+end
+
+--------------------------------------------------
+-- SLOT BUTTONS
+--------------------------------------------------
+for i = 1,3 do
+
+	local y = 35 + (i-1)*70
+
+	local save = Instance.new("TextButton",main)
+	save.Size = UDim2.new(0.3,0,0,30)
+	save.Position = UDim2.new(0.05,0,0,y)
+	save.Text = "Save "..i
+
+	local tp = Instance.new("TextButton",main)
+	tp.Size = UDim2.new(0.3,0,0,30)
+	tp.Position = UDim2.new(0.35,0,0,y)
+	tp.Text = "TP "..i
+
+	local del = Instance.new("TextButton",main)
+	del.Size = UDim2.new(0.25,0,0,30)
+	del.Position = UDim2.new(0.7,0,0,y)
+	del.Text = "X"
+
+	save.MouseButton1Click:Connect(function()
+		remote:FireServer("SAVE",i)
+		showSaved()
+	end)
+
+	tp.MouseButton1Click:Connect(function()
+		remote:FireServer("TP",i)
+	end)
+
+	del.MouseButton1Click:Connect(function()
+		remote:FireServer("DELETE",i)
+	end)
+end
+
+--------------------------------------------------
+-- KEY CHECK
+--------------------------------------------------
+enter.MouseButton1Click:Connect(function()
+
+	if box.Text == SECRET_KEY then
+		keyFrame.Visible = false
+		main.Visible = true
+	else
+		box.Text = "WRONG KEY"
+	end
+
+end)
