@@ -2,6 +2,7 @@
 
 local player = game.Players.LocalPlayer
 local RunService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
 
 local PROTECT_TIME = 0.4
 local RETURN_DELAY = 0.1 -- thời gian đứng ở spawn
@@ -31,6 +32,29 @@ btn.TextScaled = true
 btn.BackgroundColor3 = Color3.fromRGB(0,170,255)
 btn.TextColor3 = Color3.new(1,1,1)
 btn.Parent = frame
+
+--------------------------------------------------
+-- CAMERA FREEZE (GIỮ GÓC NHÌN)
+--------------------------------------------------
+local function freezeCamera(time)
+
+    local camCF = camera.CFrame
+    local oldType = camera.CameraType
+
+    camera.CameraType = Enum.CameraType.Scriptable
+
+    local t = 0
+    local con
+    con = RunService.RenderStepped:Connect(function(dt)
+        t += dt
+        camera.CFrame = camCF
+
+        if t >= time then
+            con:Disconnect()
+            camera.CameraType = oldType
+        end
+    end)
+end
 
 --------------------------------------------------
 -- ANTI RAGDOLL
@@ -105,6 +129,9 @@ btn.MouseButton1Click:Connect(function()
 
     local char = player.Character
     local hrp = char:WaitForChild("HumanoidRootPart")
+
+    -- ⭐ GIỮ NGUYÊN GÓC NHÌN
+    freezeCamera(PROTECT_TIME + RETURN_DELAY + PROTECT_TIME)
 
     -- lưu vị trí bấm TP
     local originalCF = hrp.CFrame
