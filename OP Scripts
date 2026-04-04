@@ -2,10 +2,11 @@
 
 local player = game.Players.LocalPlayer
 local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
 local camera = workspace.CurrentCamera
 
 local PROTECT_TIME = 0.4
-local RETURN_DELAY = 0.1 -- thời gian đứng ở spawn
+local RETURN_DELAY = 0.1
 
 local firstSpawnCF = nil
 
@@ -34,13 +35,12 @@ btn.TextColor3 = Color3.new(1,1,1)
 btn.Parent = frame
 
 --------------------------------------------------
--- CAMERA FREEZE (FIXED)
+-- CAMERA FREEZE
 --------------------------------------------------
 local function freezeCamera(time)
 
     local camCF = camera.CFrame
     local oldType = camera.CameraType
-    local oldSubject = camera.CameraSubject
 
     camera.CameraType = Enum.CameraType.Scriptable
     camera.CameraSubject = nil
@@ -132,28 +132,55 @@ local function safeTP(targetCF)
 end
 
 --------------------------------------------------
--- MAIN TP LOGIC
+-- TP ACTION (DÙNG CHUNG)
 --------------------------------------------------
-btn.MouseButton1Click:Connect(function()
+local tpBusy = false
 
+local function doTP()
+    if tpBusy then return end
     if not firstSpawnCF then return end
+
+    tpBusy = true
 
     local char = player.Character
     local hrp = char:WaitForChild("HumanoidRootPart")
 
-    -- giữ góc nhìn
     freezeCamera(PROTECT_TIME + RETURN_DELAY + PROTECT_TIME)
 
-    -- lưu vị trí ban đầu
     local originalCF = hrp.CFrame
 
-    -- TP tới spawn
     safeTP(firstSpawnCF)
-
     task.wait(RETURN_DELAY)
-
-    -- TP quay lại
     safeTP(originalCF)
+
+    task.wait(0.5)
+    tpBusy = false
+end
+
+--------------------------------------------------
+-- BUTTON
+--------------------------------------------------
+btn.MouseButton1Click:Connect(doTP)
+
+--------------------------------------------------
+-- AUTO TP WHEN BACKPACK UI HIDDEN
+--------------------------------------------------
+task.spawn(function()
+
+    local lastState = true
+
+    while true do
+        task.wait(0.2)
+
+        local enabled = StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.Backpack)
+
+        -- khi túi đồ bị ẩn
+        if lastState == true and enabled == false then
+            doTP()
+        end
+
+        lastState = enabled
+    end
 end)
 
 --------------------------------------------------
