@@ -1,0 +1,139 @@
+-- TP Forward + Spam + Anti Death + Anti Ragdoll
+
+local player = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+--------------------------------------------------
+-- SETTINGS
+--------------------------------------------------
+local STUDY_DISTANCE = 50
+local PROTECT_TIME = 0.4
+local SPAM_DELAY = 0.15
+
+local spamEnabled = false
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.ResetOnSpawn = false
+gui.Parent = player.PlayerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,220,0,150)
+frame.Position = UDim2.new(0.4,0,0.3,0)
+frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
+
+local tpButton = Instance.new("TextButton")
+tpButton.Size = UDim2.new(0.8,0,0.28,0)
+tpButton.Position = UDim2.new(0.1,0,0.08,0)
+tpButton.Text = "TP Forward"
+tpButton.TextScaled = true
+tpButton.Parent = frame
+
+local spamButton = Instance.new("TextButton")
+spamButton.Size = UDim2.new(0.8,0,0.28,0)
+spamButton.Position = UDim2.new(0.1,0,0.40,0)
+spamButton.Text = "TP Spam : OFF"
+spamButton.TextScaled = true
+spamButton.Parent = frame
+
+local ragLabel = Instance.new("TextLabel")
+ragLabel.Size = UDim2.new(1,0,0.2,0)
+ragLabel.Position = UDim2.new(0,0,0.72,0)
+ragLabel.BackgroundTransparency = 1
+ragLabel.Text = "Anti Ragdoll: ON"
+ragLabel.TextScaled = true
+ragLabel.TextColor3 = Color3.fromRGB(0,255,120)
+ragLabel.Parent = frame
+
+--------------------------------------------------
+-- ANTI RAGDOLL
+--------------------------------------------------
+local function antiRagdoll(char)
+
+    local hum = char:WaitForChild("Humanoid")
+
+    -- chặn state ragdoll
+    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,false)
+    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown,false)
+    hum:SetStateEnabled(Enum.HumanoidStateType.Physics,false)
+
+    hum.StateChanged:Connect(function(_,new)
+        if new == Enum.HumanoidStateType.Ragdoll
+        or new == Enum.HumanoidStateType.FallingDown
+        or new == Enum.HumanoidStateType.Physics then
+
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+    end)
+end
+
+--------------------------------------------------
+-- TP FUNCTION
+--------------------------------------------------
+local function teleportForward()
+
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    local hum = char:WaitForChild("Humanoid")
+
+    -- giữ rotation
+    local targetCF = hrp.CFrame + hrp.CFrame.LookVector * STUDY_DISTANCE
+
+    local oldHealth = hum.Health
+    hrp.CFrame = targetCF
+
+    local t = 0
+    local con
+    con = RunService.Heartbeat:Connect(function(dt)
+        t += dt
+
+        hrp.CFrame = targetCF
+        hrp.AssemblyLinearVelocity = Vector3.zero
+
+        -- anti death tạm thời
+        if hum.Health < oldHealth then
+            hum.Health = oldHealth
+        end
+
+        if t >= PROTECT_TIME then
+            con:Disconnect()
+        end
+    end)
+end
+
+--------------------------------------------------
+-- BUTTONS
+--------------------------------------------------
+tpButton.MouseButton1Click:Connect(teleportForward)
+
+spamButton.MouseButton1Click:Connect(function()
+    spamEnabled = not spamEnabled
+    spamButton.Text = spamEnabled and "TP Spam : ON" or "TP Spam : OFF"
+
+    if spamEnabled then
+        task.spawn(function()
+            while spamEnabled do
+                teleportForward()
+                task.wait(SPAM_DELAY)
+            end
+        end)
+    end
+end)
+
+--------------------------------------------------
+-- APPLY WHEN SPAWN
+--------------------------------------------------
+local function onCharacter(char)
+    antiRagdoll(char)
+end
+
+if player.Character then
+    onCharacter(player.Character)
+end
+
+player.CharacterAdded:Connect(onCharacter)
